@@ -26,6 +26,11 @@ public class LootrunDetails {
     private List<TrialType> trials = new ArrayList<>();
     private int sacrifices = 0;
     private int rerolls = 0;
+    private int challengePulls = 0;
+    private int dailyBonusPulls = 0;
+    private int dailyBonusRerolls = 0;
+    private int dailyBonusSacrifices = 0;
+    private int sacrificedPulls = 0;
 
     public Map<LootrunBeaconKind, Integer> getSelectedBeacons() {
         return Collections.unmodifiableMap(selectedBeacons);
@@ -141,5 +146,35 @@ public class LootrunDetails {
 
     public void setRerolls(int rerolls) {
         this.rerolls = rerolls;
+    }
+
+    public int getChallengePulls() { return challengePulls; }
+
+    public void setChallengePulls(int challengePulls) {
+        this.challengePulls = challengePulls;
+    }
+
+    public int getDailyBonusPulls() { return dailyBonusPulls; }
+
+    public void setDailyBonusPulls(int dailyBonusPulls) {
+        this.dailyBonusPulls = dailyBonusPulls;
+    }
+
+    public int getDailyBonusRerolls() { return dailyBonusRerolls; }
+
+    public void setDailyBonusRerolls(int dailyBonusRerolls) {
+        this.dailyBonusRerolls = dailyBonusRerolls;
+    }
+
+    public int getDailyBonusSacrifices() { return dailyBonusSacrifices; }
+
+    public void setDailyBonusSacrifices(int dailyBonusSacrifices) {
+        this.dailyBonusSacrifices = dailyBonusSacrifices;
+    }
+
+    public int getSacrificedPulls() { return sacrificedPulls; }
+
+    public void setSacrificedPulls(int sacrificedPulls) {
+        this.sacrificedPulls = sacrificedPulls;
     }
 }

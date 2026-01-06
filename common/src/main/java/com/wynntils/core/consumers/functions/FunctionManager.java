@@ -607,6 +607,11 @@ public final class FunctionManager extends Manager {
         registerFunction(new LootrunFunctions.LootrunBeaconCountFunction());
         registerFunction(new LootrunFunctions.LootrunBeaconVibrantFunction());
         registerFunction(new LootrunFunctions.LootrunChallengesFunction());
+        registerFunction(new LootrunFunctions.LootrunChallengePullsFunction());
+        registerFunction(new LootrunFunctions.LootrunDailyBonusPullsFunction());
+        registerFunction(new LootrunFunctions.LootrunDailyBonusRerollsFunction());
+        registerFunction(new LootrunFunctions.LootrunDailyBonusSacrificesFunction());
+        registerFunction(new LootrunFunctions.LootrunEffectivePullsFunction());
         registerFunction(new LootrunFunctions.LootrunLastSelectedBeaconColorFunction());
         registerFunction(new LootrunFunctions.LootrunLastSelectedBeaconVibrantFunction());
         registerFunction(new LootrunFunctions.LootrunMissionFunction());
@@ -616,11 +621,15 @@ public final class FunctionManager extends Manager {
         registerFunction(new LootrunFunctions.LootrunRedBeaconChallengeCountFunction());
         registerFunction(new LootrunFunctions.LootrunRerollsFunction());
         registerFunction(new LootrunFunctions.LootrunSacrificesFunction());
+        registerFunction(new LootrunFunctions.LootrunSacrificePercentageFunction());
+        registerFunction(new LootrunFunctions.LootrunSacrificedPullsFunction());
         registerFunction(new LootrunFunctions.LootrunStateFunction());
         registerFunction(new LootrunFunctions.LootrunTaskLocationFunction());
         registerFunction(new LootrunFunctions.LootrunTaskNameFunction());
         registerFunction(new LootrunFunctions.LootrunTaskTypeFunction());
         registerFunction(new LootrunFunctions.LootrunTimeFunction());
+        registerFunction(new LootrunFunctions.LootrunTotalPullsFunction());
+        registerFunction(new LootrunFunctions.LootrunTotalPullsSacrificedFunction());
         registerFunction(new LootrunFunctions.LootrunTrialFunction());
 
         registerFunction(new MinecraftFunctions.DirFunction());

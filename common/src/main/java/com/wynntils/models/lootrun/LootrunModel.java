@@ -31,6 +31,7 @@ import com.wynntils.models.beacons.event.BeaconMarkerEvent;
 import com.wynntils.models.beacons.type.Beacon;
 import com.wynntils.models.beacons.type.BeaconMarker;
 import com.wynntils.models.character.event.CharacterUpdateEvent;
+import com.wynntils.models.containers.containers.LootrunMasterContainer;
 import com.wynntils.models.containers.containers.LootrunRewardChestContainer;
 import com.wynntils.models.containers.event.ValuableFoundEvent;
 import com.wynntils.models.gear.type.GearTier;
@@ -110,6 +111,13 @@ public final class LootrunModel extends Model {
     private static final Pattern REWARD_REROLLS_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Rerolls§r");
     private static final Pattern REWARD_SACRIFICES_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Sacrifices§r");
     private static final Pattern LOOTRUN_EXPERIENCE_PATTERN = Pattern.compile("§.(\\d+)§7 Lootrun Experience§r");
+    private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+(\\d+) Reward Pulls?\\]");
+
+    // Lootrun Master Container
+    private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Pulls");
+    private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Rerolls?");
+    private static final Pattern DAILY_BONUS_SACRIFICES_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Sacrifices?");
+    private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("§c-.*?(\\d+).*?Reward Pulls");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -386,6 +394,15 @@ public final class LootrunModel extends Model {
             return;
         }
 
+        matcher = CHALLENGE_PULLS_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            int amount = Integer.parseInt(matcher.group(1));
+            LootrunDetails details = getCurrentLootrunDetails();
+            details.setChallengePulls(details.getChallengePulls() + amount);
+            lootrunDetailsStorage.touched();
+            return;
+        }
+
         matcher = CHALLENGE_COMPLETED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
             challengeCompleted();
@@ -579,6 +596,53 @@ public final class LootrunModel extends Model {
     public void onSlotClicked(ContainerClickEvent e) {
         if (e.getItemStack().isEmpty()) return;
 
+        if (Models.Container.getCurrentContainer() instanceof LootrunMasterContainer lootrunMasterContainer) {
+            if (lootrunMasterContainer.START_LOOTRUN_ITEM_SLOTS.contains(e.getSlotNum())) {
+                StyledText itemName = StyledText.fromComponent(e.getItemStack().getHoverName());
+
+                if (!itemName.matches(lootrunMasterContainer.START_LOOTRUN_ITEM_PATTERN)) return;
+
+                List<StyledText> lore = LoreUtils.getLore(e.getItemStack());
+
+                int dailyBonusPulls = 0;
+                int dailyBonusRerolls = 0;
+                int dailyBonusSacrifices = 0;
+                int sacrificedPulls = 0;
+
+                for (StyledText loreLine : lore) {
+                    Matcher pullsMatcher = loreLine.getMatcher(DAILY_BONUS_PULLS_PATTERN);
+                    if (pullsMatcher.find()) {
+                        dailyBonusPulls = Integer.parseInt(pullsMatcher.group(1));
+                        continue;
+                    }
+
+                    Matcher rerollsMatcher = loreLine.getMatcher(DAILY_BONUS_REROLLS_PATTERN);
+                    if (rerollsMatcher.find()) {
+                        dailyBonusRerolls = Integer.parseInt(rerollsMatcher.group(1));
+                        continue;
+                    }
+
+                    Matcher sacrificesMatcher = loreLine.getMatcher(DAILY_BONUS_SACRIFICES_PATTERN);
+                    if (sacrificesMatcher.find()) {
+                        dailyBonusSacrifices = Integer.parseInt(sacrificesMatcher.group(1));
+                        continue;
+                    }
+
+                    Matcher sacrificedPullsMatcher = loreLine.getMatcher(SACRIFICED_PULLS_LORE_PATTERN);
+                    if (sacrificedPullsMatcher.find()) {
+                        sacrificedPulls = Integer.parseInt(sacrificedPullsMatcher.group(1));
+                    }
+                }
+
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setDailyBonusPulls(details.getDailyBonusPulls() + dailyBonusPulls);
+                details.setDailyBonusRerolls(details.getDailyBonusRerolls() + dailyBonusRerolls);
+                details.setDailyBonusSacrifices(details.getDailyBonusSacrifices() + dailyBonusSacrifices);
+                details.setSacrificedPulls(details.getSacrificedPulls() + sacrificedPulls);
+                lootrunDetailsStorage.touched();
+            }
+            return;
+        }
         if (Models.Container.getCurrentContainer() instanceof LootrunRewardChestContainer lootrunRewardChestContainer) {
             if (lootrunRewardChestContainer.REROLL_REWARDS_SLOTS.contains(e.getSlotNum())) {
                 StyledText rerollLoreConfirm =
@@ -872,6 +936,76 @@ public final class LootrunModel extends Model {
         return getCurrentLootrunDetails().getRerolls();
     }
 
+    public int getChallengePulls() {
+        return getCurrentLootrunDetails().getChallengePulls();
+    }
+
+    public int getDailyBonusPulls() {
+        return getCurrentLootrunDetails().getDailyBonusPulls();
+    }
+
+    public int getDailyBonusRerolls() {
+        return getCurrentLootrunDetails().getDailyBonusRerolls();
+    }
+
+    public int getDailyBonusSacrifices() {
+        return getCurrentLootrunDetails().getDailyBonusSacrifices();
+    }
+
+    public int getSacrificedPulls() {
+        return getCurrentLootrunDetails().getSacrificedPulls();
+    }
+
+    public int getTotalRerolls() {
+        return getRerolls() + getDailyBonusRerolls();
+    }
+
+    public int getTotalSacrifices() {
+        return getCurrentLootrunDetails().getSacrifices();
+    }
+
+    public double getSacrificedPullsPercentage() {
+        int sacrifices = Models.Lootrun.getTotalSacrifices();
+
+        if (sacrifices == 0) return 0.0;
+
+        double fractionStored = 1.0 - (1.0 / (sacrifices + 1.0));
+
+        return fractionStored * 100.0;
+    }
+
+
+    public int getTotalPulls() {
+
+        int challengePulls = Models.Lootrun.getChallengePulls();
+        int dailyBonusPulls = Models.Lootrun.getDailyBonusPulls();
+        /* int missionPulls = Models.Lootrun.getMissionPulls();
+        int trialPulls = Models.Lootrun.getTrialPulls(); */
+
+        int totalPulls = challengePulls + dailyBonusPulls;
+
+        return totalPulls;
+    }
+
+    public int getTotalPullsSacrificed() {
+
+        int totalPulls = getTotalPulls();
+        double percent = getSacrificedPullsPercentage();
+
+        if (percent == 0.0) return 0;
+
+        double sacrificed = totalPulls * (percent / 100.0);
+        return (int) Math.ceil(sacrificed);
+    }
+
+    public int getEffectivePulls() {
+
+        int totalPulls = Models.Lootrun.getTotalPulls();
+        int rerolls = Models.Lootrun.getTotalRerolls();
+
+        return totalPulls * (1 + rerolls);
+    }
+
     public int getChallengesTillNextOrangeExpires() {
         List<Integer> orangeBeaconCounts = getCurrentLootrunDetails().getOrangeBeaconCounts();
 
@@ -909,6 +1043,31 @@ public final class LootrunModel extends Model {
 
     private void resetRerolls() {
         getCurrentLootrunDetails().setRerolls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetChallengePulls() {
+        getCurrentLootrunDetails().setChallengePulls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetDailyBonusPulls() {
+        getCurrentLootrunDetails().setDailyBonusPulls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetDailyBonusRerolls() {
+        getCurrentLootrunDetails().setDailyBonusRerolls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetDailyBonusSacrifices() {
+        getCurrentLootrunDetails().setDailyBonusSacrifices(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetSacrificedPulls() {
+        getCurrentLootrunDetails().setSacrificedPulls(0);
         lootrunDetailsStorage.touched();
     }
 
@@ -1009,6 +1168,11 @@ public final class LootrunModel extends Model {
             resetBeaconCounts();
             resetSacrifices();
             resetRerolls();
+            resetChallengePulls();
+            resetDailyBonusPulls();
+            resetDailyBonusRerolls();
+            resetDailyBonusSacrifices();
+            resetSacrificedPulls();
 
             possibleTaskLocations = new HashSet<>();
 

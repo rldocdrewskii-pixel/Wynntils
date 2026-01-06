@@ -14,11 +14,11 @@ public class LootrunPullCountOverlay extends TextOverlay {
             "§fChallenge Pulls: ";string(lootrun_challenge_pulls);
             if(gt(lootrun_daily_bonus_pulls; 0); concat(" §8(§b";string(lootrun_daily_bonus_pulls);"§8)"); ""); "\n";
             "§dSacrificed Pulls: ";string(lootrun_sacrificed_pulls);"\n\n";
-            "§eRerolls: ";string(int(add(lootrun_base_rerolls;lootrun_daily_bonus_rerolls)));"\n";
-            "§cSacrifices: ";string(int(add(lootrun_base_sacrifices;lootrun_daily_bonus_sacrifices)));
-            if(gt(lootrun_sacrifice_count; 0); concat(" §8(§c";string(round(lootrun_sacrifice_percentage;1));"%§8)"); ""); "\n\n";
+            "§eRerolls: ";string(int(add(lootrun_rerolls;lootrun_daily_bonus_rerolls)));"\n";
+            "§cSacrifices: ";string(int(add(lootrun_sacrifices;lootrun_daily_bonus_sacrifices)));
+            if(gt(lootrun_sacrifices; 0); concat(" §8(§c";string(round(lootrun_sacrifice_percentage;1));"%§8)"); ""); "\n\n";
             "§6Total Pulls: ";string(lootrun_total_pulls);
-            if(gt(lootrun_total_sacrificed_pulls; 0); concat(" §8(§c";string(lootrun_total_sacrificed_pulls);"§8)"); ""); "\n";
+            if(gt(lootrun_total_pulls_sacrificed; 0); concat(" §8(§c";string(lootrun_total_pulls_sacrificed);"§8)"); ""); "\n";
             "§aEffective Pulls: ";string(lootrun_effective_pulls)
             )}
             """;

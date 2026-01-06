@@ -322,4 +322,71 @@ public class LootrunFunctions {
             return List.of("session_chests");
         }
     }
+
+    public static class LootrunChallengePullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getChallengePulls();
+        }
+        @Override
+        protected List<String> getAliases() {
+            return List.of("lootrun_challenge_pulls");
+        }
+    }
+
+    public static class LootrunDailyBonusPullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getDailyBonusPulls();
+        }
+    }
+
+    public static class LootrunDailyBonusRerollsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getDailyBonusRerolls();
+        }
+    }
+
+    public static class LootrunDailyBonusSacrificesFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getDailyBonusSacrifices();
+        }
+    }
+
+    public static class LootrunSacrificedPullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getSacrificedPulls();
+        }
+    }
+
+    public static class LootrunSacrificePercentageFunction extends Function<Double> {
+        @Override
+        public Double getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getSacrificedPullsPercentage();
+        }
+    }
+
+    public static class LootrunTotalPullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getTotalPulls();
+        }
+    }
+
+    public static class LootrunTotalPullsSacrificedFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getTotalPullsSacrificed();
+        }
+    }
+
+    public static class LootrunEffectivePullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getEffectivePulls();
+        }
+    }
 }
