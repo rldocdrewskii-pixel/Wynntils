@@ -219,6 +219,12 @@ public final class LootrunModel extends Model {
     private boolean expectOrangeBeacon = false;
     private boolean expectRainbowBeacon = false;
 
+    //Beacon Tracking
+    private LootrunBeaconKind previousBeacon = null;
+    private boolean previousBeaconVibrant = false;
+    private LootrunBeaconKind previousBeaconMinusOne = null;
+    private boolean previousBeaconMinusOneVibrant = false;
+
     // Data to be persisted
     @Persisted
     private final Storage<Map<String, LootrunDetails>> lootrunDetailsStorage = new Storage<>(new TreeMap<>());
@@ -1168,7 +1174,7 @@ public final class LootrunModel extends Model {
             resetBeaconCounts();
             resetSacrifices();
             resetRerolls();
-            resetChallengePulls();
+            // Don't reset challenge pulls here - they need to persist until the next lootrun starts
             resetDailyBonusPulls();
             resetDailyBonusRerolls();
             resetDailyBonusSacrifices();
@@ -1178,6 +1184,10 @@ public final class LootrunModel extends Model {
 
             beacons = new HashMap<>();
             vibrantBeacons = new HashSet<>();
+            previousBeacon = null;
+            previousBeaconVibrant = false;
+            previousBeaconMinusOne = null;
+            previousBeaconMinusOneVibrant = false;
 
             timeLeft = 0;
             challenges = CappedValue.EMPTY;
@@ -1194,6 +1204,12 @@ public final class LootrunModel extends Model {
             lootrunDetailsStorage.touched();
 
             setLastTaskBeaconColor(color);
+
+            previousBeaconMinusOne = previousBeacon;
+            previousBeaconMinusOneVibrant = previousBeaconVibrant;
+            previousBeacon = color;
+            previousBeaconVibrant = vibrantBeacons.contains(color);
+
             WynntilsMod.postEvent(new LootrunBeaconSelectedEvent(
                     closestBeacon,
                     beacons.get(closestBeacon.beaconKind()).taskLocation(),
@@ -1201,7 +1217,6 @@ public final class LootrunModel extends Model {
 
             possibleTaskLocations = new HashSet<>();
 
-            // We selected a beacon, so other beacons are no longer relevant.
             beacons.clear();
             vibrantBeacons.clear();
             activeBeacons.clear();
@@ -1217,7 +1232,25 @@ public final class LootrunModel extends Model {
 
     private void challengeCompleted() {
         LootrunBeaconKind color = getLastTaskBeaconColor();
+        boolean wasVibrant = wasLastBeaconVibrant();
         LootrunDetails lootrunDetails = getCurrentLootrunDetails();
+
+        // Calculate pulls from Purple or Dark Gray beacons (with Aqua multiplier if applicable)
+        int totalPulls = calculateBeaconPulls(color, wasVibrant);
+
+        if (totalPulls > 0) {
+            lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + totalPulls);
+
+            // Log with Aqua bonus info if applicable
+            if (previousBeaconMinusOne == LootrunBeaconKind.AQUA) {
+                int multiplier = previousBeaconMinusOneVibrant ? 3 : 2;
+                WynntilsMod.info("Added " + totalPulls + " pulls from " + color +
+                        (wasVibrant ? " (Vibrant)" : "") + " with " +
+                        (previousBeaconMinusOneVibrant ? "Vibrant " : "") + "Aqua bonus (x" + multiplier + ")");
+            } else {
+                WynntilsMod.info("Added " + totalPulls + " pulls from " + color + (wasVibrant ? " (Vibrant)" : ""));
+            }
+        }
 
         if (color == LootrunBeaconKind.RAINBOW) {
             if (lootrunDetails.getRainbowAmount() != -1) {
@@ -1531,5 +1564,25 @@ public final class LootrunModel extends Model {
 
     private LootrunDetails getCurrentLootrunDetails() {
         return lootrunDetailsStorage.get().getOrDefault(Models.Character.getId(), new LootrunDetails());
+    }
+
+    private int calculateBeaconPulls(LootrunBeaconKind currentBeacon, boolean wasVibrant) {
+        int basePulls = 0;
+        if (currentBeacon == LootrunBeaconKind.PURPLE) {
+            basePulls = wasVibrant ? 2 : 1;
+        } else if (currentBeacon == LootrunBeaconKind.DARK_GRAY) {
+            basePulls = wasVibrant ? 6 : 3;
+        }
+
+        if (basePulls == 0) {
+            return 0;
+        }
+
+        if (previousBeaconMinusOne == LootrunBeaconKind.AQUA) {
+            int multiplier = previousBeaconMinusOneVibrant ? 3 : 2;
+            return basePulls * multiplier;
+        }
+
+        return basePulls;
     }
 }
