@@ -369,6 +369,32 @@ public class LootrunFunctions {
         }
     }
 
+    public static class LootrunMissionPullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getMissionPulls();
+        }
+    }
+
+    public static class LootrunTrialPullsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getTrialPulls();
+        }
+    }
+    public static class LootrunTrialRerollsFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getTrialRerolls();
+        }
+    }
+    public static class LootrunTrialSacrificesFunction extends Function<Integer> {
+        @Override
+        public Integer getValue(FunctionArguments arguments) {
+            return Models.Lootrun.getTrialSacrifices();
+        }
+    }
+
     public static class LootrunTotalPullsFunction extends Function<Integer> {
         @Override
         public Integer getValue(FunctionArguments arguments) {

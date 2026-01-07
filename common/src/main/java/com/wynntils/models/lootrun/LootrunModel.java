@@ -21,10 +21,7 @@ import com.wynntils.handlers.chat.type.RecipientType;
 import com.wynntils.handlers.labels.event.LabelIdentifiedEvent;
 import com.wynntils.handlers.particle.event.ParticleVerifiedEvent;
 import com.wynntils.handlers.particle.type.ParticleType;
-import com.wynntils.mc.event.ContainerClickEvent;
-import com.wynntils.mc.event.MenuEvent;
-import com.wynntils.mc.event.ScreenInitEvent;
-import com.wynntils.mc.event.SetEntityDataEvent;
+import com.wynntils.mc.event.*;
 import com.wynntils.mc.extension.EntityExtension;
 import com.wynntils.models.beacons.event.BeaconEvent;
 import com.wynntils.models.beacons.event.BeaconMarkerEvent;
@@ -118,6 +115,10 @@ public final class LootrunModel extends Model {
     private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Rerolls?");
     private static final Pattern DAILY_BONUS_SACRIFICES_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Sacrifices?");
     private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("§c-.*?(\\d+).*?Reward Pulls");
+
+    // Info Grabbers
+    private static final Pattern REROLL_CLICK_PATTERN = Pattern.compile("Click here to reroll");
+    private static final Pattern REROLLS_LEFT_PATTERN = Pattern.compile("§8\\((\\d+) rerolls? left\\)");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -224,6 +225,7 @@ public final class LootrunModel extends Model {
     private boolean previousBeaconVibrant = false;
     private LootrunBeaconKind previousBeaconMinusOne = null;
     private boolean previousBeaconMinusOneVibrant = false;
+    private boolean expectOptimismPulls = false;
 
     // Data to be persisted
     @Persisted
@@ -330,11 +332,25 @@ public final class LootrunModel extends Model {
         if (styledText.matches(LOOTRUN_COMPLETED_PATTERN)) {
             lootrunCompletedBuilder = new LootrunFinishedEventBuilder.Completed();
             lootrunFailedBuilder = null;
+            resetChallengePulls();
+            resetDailyBonusPulls();
+            resetDailyBonusRerolls();
+            resetDailyBonusSacrifices();
+            resetSacrificedPulls();
+            resetMissionPulls();
+            resetTrialPulls();
             return;
         }
         if (styledText.matches(LOOTRUN_FAILED_PATTERN)) {
             lootrunFailedBuilder = new LootrunFinishedEventBuilder.Failed();
             lootrunCompletedBuilder = null;
+            resetChallengePulls();
+            resetDailyBonusPulls();
+            resetDailyBonusRerolls();
+            resetDailyBonusSacrifices();
+            resetSacrificedPulls();
+            resetMissionPulls();
+            resetTrialPulls();
             return;
         }
 
@@ -462,8 +478,39 @@ public final class LootrunModel extends Model {
         }
 
         if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
+            if (getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)
+                    && lootrunningState == LootrunningState.CHOOSING_BEACON
+                    && !beacons.isEmpty()) {
+                expectOptimismPulls = true;
+            }
+
             newBeacons();
             return;
+        }
+
+        if (expectOptimismPulls) {
+            Matcher beaconsMatcher = styledText.getMatcher(BEACONS_PATTERN);
+
+            if (beaconsMatcher.find()) {
+                int beaconCount = 0;
+
+                beaconCount++;
+
+                if (beaconsMatcher.group("beaconTwoColor") != null) {
+                    beaconCount++;
+                }
+
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setMissionPulls(details.getMissionPulls() + beaconCount);
+                lootrunDetailsStorage.touched();
+
+                WynntilsMod.info("Added " + beaconCount + " mission pull(s) from Optimism reroll");
+            }
+        }
+
+        // Reset the flag when we see the reroll button (means all beacons have been sent)
+        if (expectOptimismPulls && styledText.matches(REROLL_CLICK_PATTERN)) {
+            expectOptimismPulls = false;
         }
 
         if (expectOrangeBeacon) {
@@ -963,11 +1010,11 @@ public final class LootrunModel extends Model {
     }
 
     public int getTotalRerolls() {
-        return getRerolls() + getDailyBonusRerolls();
+        return getRerolls() + getDailyBonusRerolls() + getTrialRerolls();
     }
 
     public int getTotalSacrifices() {
-        return getCurrentLootrunDetails().getSacrifices();
+        return getCurrentLootrunDetails().getSacrifices() + getTrialSacrifices();
     }
 
     public double getSacrificedPullsPercentage() {
@@ -980,17 +1027,32 @@ public final class LootrunModel extends Model {
         return fractionStored * 100.0;
     }
 
+    public int getMissionPulls() {
+        return 0;
+    }
+
+    public int getTrialPulls() {
+        return 0;
+    }
+
+    public int getTrialRerolls() {
+        return 0;
+    }
+
+    public int getTrialSacrifices() {
+        return 0;
+    }
+
 
     public int getTotalPulls() {
 
         int challengePulls = Models.Lootrun.getChallengePulls();
         int dailyBonusPulls = Models.Lootrun.getDailyBonusPulls();
-        /* int missionPulls = Models.Lootrun.getMissionPulls();
-        int trialPulls = Models.Lootrun.getTrialPulls(); */
+        int sacrificedPulls = Models.Lootrun.getSacrificedPulls();
+        int missionPulls = Models.Lootrun.getMissionPulls();
+        int trialPulls = Models.Lootrun.getTrialPulls();
 
-        int totalPulls = challengePulls + dailyBonusPulls;
-
-        return totalPulls;
+        return challengePulls + dailyBonusPulls + sacrificedPulls + missionPulls + trialPulls;
     }
 
     public int getTotalPullsSacrificed() {
@@ -1038,42 +1100,72 @@ public final class LootrunModel extends Model {
     }
 
     private void resetBeaconStorage() {
-        getCurrentLootrunDetails().setSelectedBeacons(new TreeMap<>());
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setSelectedBeacons(new TreeMap<>());
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetSacrifices() {
-        getCurrentLootrunDetails().setSacrifices(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setSacrifices(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetRerolls() {
-        getCurrentLootrunDetails().setRerolls(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setRerolls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetChallengePulls() {
-        getCurrentLootrunDetails().setChallengePulls(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setChallengePulls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetDailyBonusPulls() {
-        getCurrentLootrunDetails().setDailyBonusPulls(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusPulls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetDailyBonusRerolls() {
-        getCurrentLootrunDetails().setDailyBonusRerolls(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusRerolls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetDailyBonusSacrifices() {
-        getCurrentLootrunDetails().setDailyBonusSacrifices(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusSacrifices(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetSacrificedPulls() {
-        getCurrentLootrunDetails().setSacrificedPulls(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setSacrificedPulls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetMissionPulls() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setMissionPulls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetTrialPulls() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setTrialPulls(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
@@ -1098,14 +1190,18 @@ public final class LootrunModel extends Model {
     }
 
     private void resetBeaconCounts() {
-        getCurrentLootrunDetails().setRedBeaconTaskCount(0);
-        getCurrentLootrunDetails().setOrangeBeaconCounts(new ArrayList<>());
-        getCurrentLootrunDetails().setRainbowBeaconCount(0);
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setRedBeaconTaskCount(0);
+        details.setOrangeBeaconCounts(new ArrayList<>());
+        details.setRainbowBeaconCount(0);
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
     private void resetMissions() {
-        getCurrentLootrunDetails().setMissions(new ArrayList<>());
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setMissions(new ArrayList<>());
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
@@ -1129,7 +1225,9 @@ public final class LootrunModel extends Model {
     }
 
     private void resetTrials() {
-        getCurrentLootrunDetails().setTrials(new ArrayList<>());
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setTrials(new ArrayList<>());
+        lootrunDetailsStorage.get().put(Models.Character.getId(), details);
         lootrunDetailsStorage.touched();
     }
 
@@ -1174,11 +1272,13 @@ public final class LootrunModel extends Model {
             resetBeaconCounts();
             resetSacrifices();
             resetRerolls();
-            // Don't reset challenge pulls here - they need to persist until the next lootrun starts
+            resetChallengePulls();
             resetDailyBonusPulls();
             resetDailyBonusRerolls();
             resetDailyBonusSacrifices();
             resetSacrificedPulls();
+            resetMissionPulls();
+            resetTrialPulls();
 
             possibleTaskLocations = new HashSet<>();
 
@@ -1188,6 +1288,7 @@ public final class LootrunModel extends Model {
             previousBeaconVibrant = false;
             previousBeaconMinusOne = null;
             previousBeaconMinusOneVibrant = false;
+            expectOptimismPulls = false;
 
             timeLeft = 0;
             challenges = CappedValue.EMPTY;
@@ -1585,4 +1686,49 @@ public final class LootrunModel extends Model {
 
         return basePulls;
     }
+    @SubscribeEvent
+    public void onChatClick(ChatClickEvent e) {
+        // Convert the component to StyledText
+        StyledText styledText = StyledText.fromComponent(e.getComponent());
+
+        // Check if this is a reroll click message
+        Matcher rerollClickMatcher = styledText.getMatcher(REROLL_CLICK_PATTERN);
+        if (!rerollClickMatcher.find()) return;
+
+        // Check if we're in the choosing beacon state
+        if (lootrunningState != LootrunningState.CHOOSING_BEACON) return;
+
+        // Check if the user has completed the Optimism mission
+        if (!getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)) return;
+
+        // Check if we have rerolls left by looking for the rerolls left pattern
+        Matcher rerollsLeftMatcher = styledText.getMatcher(REROLLS_LEFT_PATTERN);
+        boolean hasRerollsLeft = rerollsLeftMatcher.find() && Integer.parseInt(rerollsLeftMatcher.group(1)) > 0;
+
+        // If the pattern is not found, that means rerolls = 0 (text disappeared)
+        if (!hasRerollsLeft) return;
+
+        // Count the number of beacons in the message
+        Matcher beaconsMatcher = styledText.getMatcher(BEACONS_PATTERN);
+        int beaconCount = 0;
+
+        while (beaconsMatcher.find()) {
+            beaconCount++;
+
+            // Check if there's a second beacon in this match
+            if (beaconsMatcher.group("beaconTwoColor") != null) {
+                beaconCount++;
+            }
+        }
+
+        // Add pulls based on number of beacons found
+        if (beaconCount > 0) {
+            LootrunDetails details = getCurrentLootrunDetails();
+            details.setMissionPulls(details.getMissionPulls() + beaconCount);
+            lootrunDetailsStorage.touched();
+
+            WynntilsMod.info("Added " + beaconCount + " mission pull(s) from Optimism reroll");
+        }
+    }
+
 }

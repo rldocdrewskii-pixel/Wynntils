@@ -31,6 +31,8 @@ public class LootrunDetails {
     private int dailyBonusRerolls = 0;
     private int dailyBonusSacrifices = 0;
     private int sacrificedPulls = 0;
+    private int missionPulls = 0;
+    private int trialPulls = 0;
 
     public Map<LootrunBeaconKind, Integer> getSelectedBeacons() {
         return Collections.unmodifiableMap(selectedBeacons);
@@ -177,4 +179,12 @@ public class LootrunDetails {
     public void setSacrificedPulls(int sacrificedPulls) {
         this.sacrificedPulls = sacrificedPulls;
     }
+
+    public int getMissionPulls() { return missionPulls; }
+
+    public void setMissionPulls(int missionPulls) {this.missionPulls = missionPulls;}
+
+    public int getTrialPulls() { return trialPulls; }
+
+    public void setTrialPulls(int trialPulls) {this.trialPulls = trialPulls;}
 }
