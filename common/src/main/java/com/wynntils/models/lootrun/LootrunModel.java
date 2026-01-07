@@ -117,8 +117,7 @@ public final class LootrunModel extends Model {
     private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("§c-.*?(\\d+).*?Reward Pulls");
 
     // Info Grabbers
-    private static final Pattern REROLL_CLICK_PATTERN = Pattern.compile("Click here to reroll");
-    private static final Pattern REROLLS_LEFT_PATTERN = Pattern.compile("§8\\((\\d+) rerolls? left\\)");
+    private static final Pattern MISSION_REWARD_PULLS_PATTERN = Pattern.compile("§7\\[\\+(\\d+) (?:End )?Reward Pulls?\\]");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -225,7 +224,8 @@ public final class LootrunModel extends Model {
     private boolean previousBeaconVibrant = false;
     private LootrunBeaconKind previousBeaconMinusOne = null;
     private boolean previousBeaconMinusOneVibrant = false;
-    private boolean expectOptimismPulls = false;
+    private boolean justCompletedChallenge = false;
+    private boolean expectMultipleMissionPulls = false;
 
     // Data to be persisted
     @Persisted
@@ -371,6 +371,14 @@ public final class LootrunModel extends Model {
             if (matcher.matches()) {
                 MissionType mission = MissionType.fromName(matcher.group("mission"));
                 addMission(mission);
+
+                if (mission == MissionType.HIGH_ROLLER) {
+                    int amount = 10;
+                    LootrunDetails details = getCurrentLootrunDetails();
+                    details.setMissionPulls(details.getMissionPulls() + amount);
+                    lootrunDetailsStorage.touched();
+                    return;
+                }
                 return;
             }
         }
@@ -428,7 +436,28 @@ public final class LootrunModel extends Model {
         matcher = CHALLENGE_COMPLETED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
             challengeCompleted();
+            justCompletedChallenge = true;
+
+            // Check if we have missions that grant pulls on challenge completion
+            if (getCurrentLootrunDetails().getMissions().contains(MissionType.JESTERS_TRICK) ||
+                    getCurrentLootrunDetails().getMissions().contains(MissionType.COMPLETE_CHAOS)) {
+                expectMultipleMissionPulls = true;
+            }
             return;
+        }
+
+        if (expectMultipleMissionPulls) {
+            matcher = MISSION_REWARD_PULLS_PATTERN.matcher(styledText.getString());
+            if (matcher.find()) {
+                int amount = Integer.parseInt(matcher.group(1));
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setMissionPulls(details.getMissionPulls() + amount);
+                lootrunDetailsStorage.touched();
+                return;  // Don't reset flag - keep checking next lines
+            } else {
+                // No more mission pulls found, reset the flag
+                expectMultipleMissionPulls = false;
+            }
         }
 
         matcher = CHALLENGE_FAILED_PATTERN.matcher(styledText.getString());
@@ -478,39 +507,21 @@ public final class LootrunModel extends Model {
         }
 
         if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
-            if (getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)
-                    && lootrunningState == LootrunningState.CHOOSING_BEACON
-                    && !beacons.isEmpty()) {
-                expectOptimismPulls = true;
-            }
 
-            newBeacons();
-            return;
-        }
+            boolean isReroll =  !justCompletedChallenge && !beacons.isEmpty();
+            if (isReroll && getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM) && lootrunningState == LootrunningState.CHOOSING_BEACON) {
 
-        if (expectOptimismPulls) {
-            Matcher beaconsMatcher = styledText.getMatcher(BEACONS_PATTERN);
-
-            if (beaconsMatcher.find()) {
-                int beaconCount = 0;
-
-                beaconCount++;
-
-                if (beaconsMatcher.group("beaconTwoColor") != null) {
-                    beaconCount++;
-                }
+                int offered = beacons.size();
 
                 LootrunDetails details = getCurrentLootrunDetails();
-                details.setMissionPulls(details.getMissionPulls() + beaconCount);
+                details.setMissionPulls(details.getMissionPulls() + offered);
                 lootrunDetailsStorage.touched();
 
-                WynntilsMod.info("Added " + beaconCount + " mission pull(s) from Optimism reroll");
+                WynntilsMod.info("Added " + offered + " mission pull(s) from Optimism reroll");
             }
-        }
-
-        // Reset the flag when we see the reroll button (means all beacons have been sent)
-        if (expectOptimismPulls && styledText.matches(REROLL_CLICK_PATTERN)) {
-            expectOptimismPulls = false;
+            justCompletedChallenge = false;
+            newBeacons();
+            return;
         }
 
         if (expectOrangeBeacon) {
@@ -1028,7 +1039,7 @@ public final class LootrunModel extends Model {
     }
 
     public int getMissionPulls() {
-        return 0;
+        return getCurrentLootrunDetails().getMissionPulls();
     }
 
     public int getTrialPulls() {
@@ -1288,7 +1299,6 @@ public final class LootrunModel extends Model {
             previousBeaconVibrant = false;
             previousBeaconMinusOne = null;
             previousBeaconMinusOneVibrant = false;
-            expectOptimismPulls = false;
 
             timeLeft = 0;
             challenges = CappedValue.EMPTY;
@@ -1681,54 +1691,15 @@ public final class LootrunModel extends Model {
 
         if (previousBeaconMinusOne == LootrunBeaconKind.AQUA) {
             int multiplier = previousBeaconMinusOneVibrant ? 3 : 2;
-            return basePulls * multiplier;
+            basePulls *= multiplier;
+        }
+
+        if (currentBeacon == LootrunBeaconKind.PURPLE
+                && getCurrentLootrunDetails().getMissions().contains(MissionType.PORPHYROPHOBIA)) {
+            basePulls *= 2;
         }
 
         return basePulls;
-    }
-    @SubscribeEvent
-    public void onChatClick(ChatClickEvent e) {
-        // Convert the component to StyledText
-        StyledText styledText = StyledText.fromComponent(e.getComponent());
-
-        // Check if this is a reroll click message
-        Matcher rerollClickMatcher = styledText.getMatcher(REROLL_CLICK_PATTERN);
-        if (!rerollClickMatcher.find()) return;
-
-        // Check if we're in the choosing beacon state
-        if (lootrunningState != LootrunningState.CHOOSING_BEACON) return;
-
-        // Check if the user has completed the Optimism mission
-        if (!getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)) return;
-
-        // Check if we have rerolls left by looking for the rerolls left pattern
-        Matcher rerollsLeftMatcher = styledText.getMatcher(REROLLS_LEFT_PATTERN);
-        boolean hasRerollsLeft = rerollsLeftMatcher.find() && Integer.parseInt(rerollsLeftMatcher.group(1)) > 0;
-
-        // If the pattern is not found, that means rerolls = 0 (text disappeared)
-        if (!hasRerollsLeft) return;
-
-        // Count the number of beacons in the message
-        Matcher beaconsMatcher = styledText.getMatcher(BEACONS_PATTERN);
-        int beaconCount = 0;
-
-        while (beaconsMatcher.find()) {
-            beaconCount++;
-
-            // Check if there's a second beacon in this match
-            if (beaconsMatcher.group("beaconTwoColor") != null) {
-                beaconCount++;
-            }
-        }
-
-        // Add pulls based on number of beacons found
-        if (beaconCount > 0) {
-            LootrunDetails details = getCurrentLootrunDetails();
-            details.setMissionPulls(details.getMissionPulls() + beaconCount);
-            lootrunDetailsStorage.touched();
-
-            WynntilsMod.info("Added " + beaconCount + " mission pull(s) from Optimism reroll");
-        }
     }
 
 }
