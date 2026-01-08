@@ -109,15 +109,13 @@ public final class LootrunModel extends Model {
     private static final Pattern REWARD_SACRIFICES_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Sacrifices§r");
     private static final Pattern LOOTRUN_EXPERIENCE_PATTERN = Pattern.compile("§.(\\d+)§7 Lootrun Experience§r");
     private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+(\\d+) Reward Pulls?\\]");
+    private static final Pattern TRIAL_PULLS_PATTERN = Pattern.compile("\\[(\\d+) Reward Pulls?\\]");
 
     // Lootrun Master Container
     private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Pulls");
     private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Rerolls?");
     private static final Pattern DAILY_BONUS_SACRIFICES_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Sacrifices?");
     private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("§c-.*?(\\d+).*?Reward Pulls");
-
-    // Info Grabbers
-    private static final Pattern MISSION_REWARD_PULLS_PATTERN = Pattern.compile("§7\\[\\+(\\d+) (?:End )?Reward Pulls?\\]");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -226,6 +224,10 @@ public final class LootrunModel extends Model {
     private boolean previousBeaconMinusOneVibrant = false;
     private boolean justCompletedChallenge = false;
     private boolean expectMultipleMissionPulls = false;
+    private boolean justSawMissionName = false;
+    private boolean expectTrialPulls = false;
+    private boolean justSawTrialName = false;
+    private boolean expectCompleteChaosBeacon = false;
 
     // Data to be persisted
     @Persisted
@@ -370,24 +372,22 @@ public final class LootrunModel extends Model {
             matcher = COMPLETED_MISSION_PATTERN.matcher(styledText.getString());
             if (matcher.matches()) {
                 MissionType mission = MissionType.fromName(matcher.group("mission"));
+                WynntilsMod.info("[MISSION PULL DEBUG] Mission completed (from completion message): " + mission);
                 addMission(mission);
 
                 if (mission == MissionType.HIGH_ROLLER) {
                     int amount = 10;
                     LootrunDetails details = getCurrentLootrunDetails();
+                    int oldMissionPulls = details.getMissionPulls();
                     details.setMissionPulls(details.getMissionPulls() + amount);
                     lootrunDetailsStorage.touched();
+                    WynntilsMod.info("[MISSION PULL DEBUG] High Roller mission pulls: " +
+                            oldMissionPulls + " + " + amount + " = " +
+                            details.getMissionPulls());
                     return;
                 }
                 return;
             }
-        }
-
-        matcher = ACTIVE_MISSION_PATTERN.matcher(styledText.getString());
-        if (matcher.find()) {
-            MissionType mission = MissionType.fromName(matcher.group("mission"));
-            addMission(mission);
-            return;
         }
 
         matcher = TRIAL_STARTED_PATTERN.matcher(styledText.getString());
@@ -401,8 +401,78 @@ public final class LootrunModel extends Model {
             if (matcher.find()) {
                 TrialType trial = TrialType.fromName(matcher.group("trial"));
                 addTrial(trial);
+                expectTrialStarted = false;
+
+                // Check if this trial grants pulls
+                if (trial == TrialType.LIGHTS_OUT || trial == TrialType.SIDE_HUSTLE) {
+                    expectTrialPulls = true;
+                    justSawTrialName = true;
+                    WynntilsMod.info("[TRIAL PULL DEBUG] Trial detected that grants pulls: " + trial +
+                            " | Set expectTrialPulls=true, justSawTrialName=true");
+                }
+                return;
             }
-            expectTrialStarted = false;
+        }
+
+        matcher = TRIAL_NAME_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            TrialType trial = TrialType.fromName(matcher.group("trial"));
+
+            // Check if this is a trial that grants pulls
+            if (trial == TrialType.LIGHTS_OUT || trial == TrialType.SIDE_HUSTLE) {
+                expectTrialPulls = true;
+                justSawTrialName = true;
+                WynntilsMod.info("[TRIAL PULL DEBUG] Trial detected: " + trial +
+                        " | Set expectTrialPulls=true, justSawTrialName=true");
+            }
+            // Don't return - continue to check for pulls in the same message
+        }
+
+        // Check for trial pulls BEFORE challenge pulls
+        matcher = TRIAL_PULLS_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            int amount = Integer.parseInt(matcher.group(1));
+
+            if (expectTrialPulls && justSawTrialName) {
+                // This is a trial pull
+                LootrunDetails details = getCurrentLootrunDetails();
+                int oldTrialPulls = details.getTrialPulls();
+                details.setTrialPulls(details.getTrialPulls() + amount);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("[TRIAL PULL DEBUG] Trial pulls added: " +
+                        oldTrialPulls + " + " + amount + " = " +
+                        details.getTrialPulls() +
+                        " | Message: " + styledText.getString());
+
+                justSawTrialName = false;
+                expectTrialPulls = false;
+                return;
+            }
+        }
+
+        matcher = ACTIVE_MISSION_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            MissionType mission = MissionType.fromName(matcher.group("mission"));
+
+            Matcher trialMatcher = TRIAL_NAME_PATTERN.matcher(styledText.getString());
+            if (expectTrialPulls && trialMatcher.find()) {
+                justSawTrialName = true;
+                WynntilsMod.info("[TRIAL PULL DEBUG] Saw trial name in trial context (not treating as mission): " +
+                        trialMatcher.group("trial") + ", set justSawTrialName=true");
+                return;
+            }
+
+            // Otherwise, treat it as an active mission
+            WynntilsMod.info("[MISSION PULL DEBUG] Active mission detected: " + mission +
+                    " | justSawMissionName=" + justSawMissionName +
+                    ", expectMultipleMissionPulls=" + expectMultipleMissionPulls);
+            addMission(mission);
+
+            // If we're expecting mission pulls and just saw a mission name, mark it
+            if (expectMultipleMissionPulls) {
+                justSawMissionName = true;
+                WynntilsMod.info("[MISSION PULL DEBUG] Set justSawMissionName=true (expecting mission pulls)");
+            }
             return;
         }
 
@@ -428,36 +498,53 @@ public final class LootrunModel extends Model {
         if (matcher.find()) {
             int amount = Integer.parseInt(matcher.group(1));
             LootrunDetails details = getCurrentLootrunDetails();
-            details.setChallengePulls(details.getChallengePulls() + amount);
-            lootrunDetailsStorage.touched();
-            return;
+
+            if (justSawMissionName) {
+                // This is a mission pull
+                int oldMissionPulls = details.getMissionPulls();
+                details.setMissionPulls(details.getMissionPulls() + amount);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("[MISSION PULL DEBUG] Mission pulls from chat: " +
+                        oldMissionPulls + " + " + amount + " = " +
+                        details.getMissionPulls() +
+                        " | Message: " + styledText.getString());
+                return;
+            } else {
+                // Regular challenge pull
+                int oldChallengePulls = details.getChallengePulls();
+                details.setChallengePulls(details.getChallengePulls() + amount);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("[MISSION PULL DEBUG] NOT a mission pull (justSawMissionName=false): " +
+                        oldChallengePulls + " + " + amount + " = " +
+                        details.getChallengePulls() +
+                        " | Message: " + styledText.getString());
+                return;
+            }
         }
 
         matcher = CHALLENGE_COMPLETED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
+            WynntilsMod.info("[MISSION PULL DEBUG] Challenge Completed detected!");
+            WynntilsMod.info("[MISSION PULL DEBUG] Current missions: " +
+                    getCurrentLootrunDetails().getMissions());
             challengeCompleted();
             justCompletedChallenge = true;
 
             // Check if we have missions that grant pulls on challenge completion
             if (getCurrentLootrunDetails().getMissions().contains(MissionType.JESTERS_TRICK) ||
-                    getCurrentLootrunDetails().getMissions().contains(MissionType.COMPLETE_CHAOS)) {
+                    getCurrentLootrunDetails().getMissions().contains(MissionType.CHRONOKINESIS)) {
                 expectMultipleMissionPulls = true;
+                WynntilsMod.info("[MISSION PULL DEBUG] Jester's Trick or Chronokinesis active, " +
+                        "expecting multiple mission pulls. Set expectMultipleMissionPulls=true");
+            }
+
+            // Check if Complete Chaos is active
+            if (getCurrentLootrunDetails().getMissions().contains(MissionType.COMPLETE_CHAOS)) {
+                expectCompleteChaosBeacon = true;
+                WynntilsMod.info("[MISSION PULL DEBUG] Complete Chaos active, " +
+                        "expecting beacon reward. Set expectCompleteChaosBeacon=true");
             }
             return;
-        }
-
-        if (expectMultipleMissionPulls) {
-            matcher = MISSION_REWARD_PULLS_PATTERN.matcher(styledText.getString());
-            if (matcher.find()) {
-                int amount = Integer.parseInt(matcher.group(1));
-                LootrunDetails details = getCurrentLootrunDetails();
-                details.setMissionPulls(details.getMissionPulls() + amount);
-                lootrunDetailsStorage.touched();
-                return;  // Don't reset flag - keep checking next lines
-            } else {
-                // No more mission pulls found, reset the flag
-                expectMultipleMissionPulls = false;
-            }
         }
 
         matcher = CHALLENGE_FAILED_PATTERN.matcher(styledText.getString());
@@ -479,6 +566,35 @@ public final class LootrunModel extends Model {
             boolean beaconOneVibrant = matcher.group("beaconOneVibrant") != null;
             if (beaconOneVibrant) {
                 vibrantBeacons.add(beaconOneKind);
+            }
+
+            // Handle Complete Chaos beacon reward
+            if (expectCompleteChaosBeacon) {
+                int completeChaossPulls = 0;
+
+                if (beaconOneKind == LootrunBeaconKind.PURPLE) {
+                    completeChaossPulls = beaconOneVibrant ? 2 : 1;
+                    WynntilsMod.info("[MISSION PULL DEBUG] Complete Chaos: " +
+                            (beaconOneVibrant ? "Vibrant " : "") + "Purple beacon detected, granting " +
+                            completeChaossPulls + " mission pulls");
+                } else if (beaconOneKind == LootrunBeaconKind.DARK_GRAY) {
+                    completeChaossPulls = beaconOneVibrant ? 6 : 3;
+                    WynntilsMod.info("[MISSION PULL DEBUG] Complete Chaos: " +
+                            (beaconOneVibrant ? "Vibrant " : "") + "Dark Gray beacon detected, granting " +
+                            completeChaossPulls + " mission pulls");
+                }
+
+                if (completeChaossPulls > 0) {
+                    LootrunDetails details = getCurrentLootrunDetails();
+                    int oldMissionPulls = details.getMissionPulls();
+                    details.setMissionPulls(details.getMissionPulls() + completeChaossPulls);
+                    lootrunDetailsStorage.touched();
+                    WynntilsMod.info("[MISSION PULL DEBUG] Complete Chaos mission pulls: " +
+                            oldMissionPulls + " + " + completeChaossPulls + " = " +
+                            details.getMissionPulls());
+                }
+
+                expectCompleteChaosBeacon = false;
             }
 
             expectOrangeBeacon = expectOrangeBeacon || beaconOneKind == LootrunBeaconKind.ORANGE;
@@ -507,19 +623,33 @@ public final class LootrunModel extends Model {
         }
 
         if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
+            boolean isReroll = !justCompletedChallenge && !beacons.isEmpty();
+            WynntilsMod.info("[MISSION PULL DEBUG] Choose beacon detected!");
+            WynntilsMod.info("[MISSION PULL DEBUG] Before reset - justCompletedChallenge=" +
+                    justCompletedChallenge +
+                    ", expectMultipleMissionPulls=" + expectMultipleMissionPulls +
+                    ", justSawMissionName=" + justSawMissionName);
 
-            boolean isReroll =  !justCompletedChallenge && !beacons.isEmpty();
-            if (isReroll && getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM) && lootrunningState == LootrunningState.CHOOSING_BEACON) {
-
+            if (isReroll && getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM) &&
+                    lootrunningState == LootrunningState.CHOOSING_BEACON) {
                 int offered = beacons.size();
-
+                int oldMissionPulls = getCurrentLootrunDetails().getMissionPulls();
                 LootrunDetails details = getCurrentLootrunDetails();
                 details.setMissionPulls(details.getMissionPulls() + offered);
                 lootrunDetailsStorage.touched();
 
-                WynntilsMod.info("Added " + offered + " mission pull(s) from Optimism reroll");
+                WynntilsMod.info("[MISSION PULL DEBUG] Optimism reroll mission pulls: " +
+                        oldMissionPulls + " + " + offered + " = " +
+                        details.getMissionPulls());
             }
+
             justCompletedChallenge = false;
+            expectMultipleMissionPulls = false;
+            justSawMissionName = false;
+            expectTrialPulls = false;
+            justSawTrialName = false;
+            expectCompleteChaosBeacon = false;
+            WynntilsMod.info("[MISSION PULL DEBUG] Reset all flags to false");
             newBeacons();
             return;
         }
@@ -781,7 +911,7 @@ public final class LootrunModel extends Model {
         double oldBeaconDistanceToPlayer = closestBeacon == null
                 ? Double.MAX_VALUE
                 : VectorUtils.distanceIgnoringY(
-                        closestBeacon.position(), McUtils.mc().player.position());
+                closestBeacon.position(), McUtils.mc().player.position());
         if (newBeaconDistanceToPlayer < BEACON_REMOVAL_RADIUS
                 && newBeaconDistanceToPlayer <= oldBeaconDistanceToPlayer) {
             setClosestBeacon(event.getBeacon());
@@ -888,7 +1018,7 @@ public final class LootrunModel extends Model {
         activeTaskTypes.putIfAbsent(beaconPair.a().beaconKind(), lootrunMarker.getTaskType());
 
         boolean foundBeacon = updateTaskLocationPrediction(
-                        beaconPair.a(), lootrunMarker, beaconMarker.distance().get())
+                beaconPair.a(), lootrunMarker, beaconMarker.distance().get())
                 || beacons.containsKey(beaconPair.a().beaconKind());
 
         entity.setRendered(!foundBeacon || !shouldHide);
@@ -1043,7 +1173,7 @@ public final class LootrunModel extends Model {
     }
 
     public int getTrialPulls() {
-        return 0;
+        return getCurrentLootrunDetails().getTrialPulls();
     }
 
     public int getTrialRerolls() {
@@ -1346,21 +1476,56 @@ public final class LootrunModel extends Model {
         boolean wasVibrant = wasLastBeaconVibrant();
         LootrunDetails lootrunDetails = getCurrentLootrunDetails();
 
-        // Calculate pulls from Purple or Dark Gray beacons (with Aqua multiplier if applicable)
-        int totalPulls = calculateBeaconPulls(color, wasVibrant);
+        WynntilsMod.info("[PULL DEBUG] challengeCompleted() called - Beacon: " + color +
+                (wasVibrant ? " (Vibrant)" : "") +
+                " | Previous: " + previousBeacon +
+                (previousBeaconVibrant ? " (Vibrant)" : "") +
+                " | Previous-1: " + previousBeaconMinusOne +
+                (previousBeaconMinusOneVibrant ? " (Vibrant)" : ""));
 
-        if (totalPulls > 0) {
-            lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + totalPulls);
+        // Calculate base pulls from Purple or Dark Gray beacons (with Aqua multiplier if applicable)
+        int basePulls = 0;
+        if (color == LootrunBeaconKind.PURPLE) {
+            basePulls = wasVibrant ? 2 : 1;
+            WynntilsMod.info("[PULL DEBUG] Purple beacon detected, base pulls: " + basePulls);
+        } else if (color == LootrunBeaconKind.DARK_GRAY) {
+            basePulls = wasVibrant ? 6 : 3;
+            WynntilsMod.info("[PULL DEBUG] Dark Gray beacon detected, base pulls: " + basePulls);
+        }
 
-            // Log with Aqua bonus info if applicable
-            if (previousBeaconMinusOne == LootrunBeaconKind.AQUA) {
-                int multiplier = previousBeaconMinusOneVibrant ? 3 : 2;
-                WynntilsMod.info("Added " + totalPulls + " pulls from " + color +
-                        (wasVibrant ? " (Vibrant)" : "") + " with " +
-                        (previousBeaconMinusOneVibrant ? "Vibrant " : "") + "Aqua bonus (x" + multiplier + ")");
+        // Apply Aqua multiplier if applicable
+        if (basePulls > 0 && previousBeaconMinusOne == LootrunBeaconKind.AQUA) {
+            int multiplier = previousBeaconMinusOneVibrant ? 3 : 2;
+            int oldBasePulls = basePulls;
+            basePulls *= multiplier;
+            WynntilsMod.info("[PULL DEBUG] Aqua multiplier applied: " + oldBasePulls + " × " + multiplier + " = " + basePulls);
+        }
+
+        // Add base pulls to challenge pulls
+        if (basePulls > 0) {
+            int oldChallengePulls = lootrunDetails.getChallengePulls();
+            lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + basePulls);
+            WynntilsMod.info("[PULL DEBUG] Challenge pulls: " + oldChallengePulls + " + " + basePulls + " = " + lootrunDetails.getChallengePulls());
+
+            // If Porphyrophobia is active and this is a Purple beacon, add the same amount again as mission pulls
+            if (color == LootrunBeaconKind.PURPLE
+                    && getCurrentLootrunDetails().getMissions().contains(MissionType.PORPHYROPHOBIA)) {
+                int oldMissionPulls = lootrunDetails.getMissionPulls();
+                lootrunDetails.setMissionPulls(lootrunDetails.getMissionPulls() + basePulls);
+                WynntilsMod.info("[PULL DEBUG] Porphyrophobia active! Mission pulls: " + oldMissionPulls + " + " + basePulls + " = " + lootrunDetails.getMissionPulls());
+
+                WynntilsMod.info("Added " + basePulls + " challenge pulls and " + basePulls + " mission pulls (Porphy) from " + color +
+                        (wasVibrant ? " (Vibrant)" : "") +
+                        (previousBeaconMinusOne == LootrunBeaconKind.AQUA ?
+                                " with " + (previousBeaconMinusOneVibrant ? "Vibrant " : "") + "Aqua bonus" : ""));
             } else {
-                WynntilsMod.info("Added " + totalPulls + " pulls from " + color + (wasVibrant ? " (Vibrant)" : ""));
+                WynntilsMod.info("Added " + basePulls + " challenge pulls from " + color +
+                        (wasVibrant ? " (Vibrant)" : "") +
+                        (previousBeaconMinusOne == LootrunBeaconKind.AQUA ?
+                                " with " + (previousBeaconMinusOneVibrant ? "Vibrant " : "") + "Aqua bonus" : ""));
             }
+        } else {
+            WynntilsMod.info("[PULL DEBUG] No beacon pulls added (non-pull beacon type)");
         }
 
         if (color == LootrunBeaconKind.RAINBOW) {
