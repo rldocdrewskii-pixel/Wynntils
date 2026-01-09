@@ -12,9 +12,9 @@ public class LootrunPullCountOverlay extends TextOverlay {
             """
             {concat(
             "§fChallenge Pulls: ";string(lootrun_challenge_pulls);
-            if(gt(lootrun_daily_bonus_pulls; 0); concat(" §8(§b"+;string(lootrun_daily_bonus_pulls);"§8)"); ""); "\n";
+            if(gt(lootrun_daily_bonus_pulls; 0); concat(" §8(§b+";string(lootrun_daily_bonus_pulls);"§8)"); ""); "\n";
             if(gt(lootrun_mission_pulls; 0); concat("§9Mission Pulls: ";string(lootrun_mission_pulls);"\n"); "");
-            if(gt(lootrun_trial_pulls; 0); concat("§4Trial Pulls: ";string(lootrun_trial_pulls);"\n"); "");
+            if(neq(lootrun_trial_pulls; 0); concat("§4Trial Pulls: ";string(lootrun_trial_pulls);"\n"); "");
             if(gt(lootrun_sacrificed_pulls; 0); concat("§cSacrificed Pulls: ";string(lootrun_sacrificed_pulls);"\n"); "");
             "\n";
             "§eRerolls: ";string(int(add(lootrun_rerolls;lootrun_daily_bonus_rerolls)));"\n";

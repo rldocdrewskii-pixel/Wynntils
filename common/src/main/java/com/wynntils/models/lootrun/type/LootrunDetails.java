@@ -33,6 +33,13 @@ public class LootrunDetails {
     private int sacrificedPulls = 0;
     private int missionPulls = 0;
     private int trialPulls = 0;
+    private int trialRerolls = 0;
+    private int trialSacrifices = 0;
+    private boolean treasuryBillActive = false;
+    private int treasuryBillPullsGained = 0;
+    private long treasuryBillLastDeductionTime = -1;
+    private long treasuryBillStartTime = -1;
+    private int treasuryBillStartingPulls = 0;
 
     public Map<LootrunBeaconKind, Integer> getSelectedBeacons() {
         return Collections.unmodifiableMap(selectedBeacons);
@@ -187,4 +194,41 @@ public class LootrunDetails {
     public int getTrialPulls() { return trialPulls; }
 
     public void setTrialPulls(int trialPulls) {this.trialPulls = trialPulls;}
+
+    public int getTrialRerolls() {
+        return trialRerolls;
+    }
+
+    public void setTrialRerolls(int trialRerolls) {
+        this.trialRerolls = trialRerolls;
+    }
+
+    public int getTrialSacrifices() {
+        return trialSacrifices;
+    }
+
+    public void setTrialSacrifices(int trialSacrifices) {
+        this.trialSacrifices = trialSacrifices;
+    }
+
+    public boolean isTreasuryBillActive() { return treasuryBillActive; }
+
+    public void setTreasuryBillActive(boolean treasuryBillActive) { this.treasuryBillActive = treasuryBillActive; }
+
+    public int getTreasuryBillPullsGained() { return treasuryBillPullsGained; }
+
+    public void setTreasuryBillPullsGained(int treasuryBillPullsGained) { this.treasuryBillPullsGained = treasuryBillPullsGained; }
+
+    public long getTreasuryBillLastDeductionTime() { return treasuryBillLastDeductionTime; }
+
+    public void setTreasuryBillLastDeductionTime(long treasuryBillLastDeductionTime) { this.treasuryBillLastDeductionTime = treasuryBillLastDeductionTime; }
+
+    public long getTreasuryBillStartTime() { return treasuryBillStartTime; }
+
+    public void setTreasuryBillStartTime(long treasuryBillStartTime) { this.treasuryBillStartTime = treasuryBillStartTime; }
+
+    public int getTreasuryBillStartingPulls() { return treasuryBillStartingPulls; }
+
+    public void setTreasuryBillStartingPulls(int treasuryBillStartingPulls) {this.treasuryBillStartingPulls = treasuryBillStartingPulls;}
+
 }
