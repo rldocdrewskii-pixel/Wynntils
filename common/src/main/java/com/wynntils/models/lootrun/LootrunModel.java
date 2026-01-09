@@ -232,6 +232,10 @@ public final class LootrunModel extends Model {
     private boolean previousBeaconVibrant = false;
     private LootrunBeaconKind previousBeaconMinusOne = null;
     private boolean previousBeaconMinusOneVibrant = false;
+    private LootrunBeaconKind completeChaosBeacon = null;
+    private boolean completeChaosBeaconVibrant = false;
+
+    // Mission/Trial Tracking
     private boolean justCompletedChallenge = false;
     private boolean expectMultipleMissionPulls = false;
     private boolean justSawMissionName = false;
@@ -667,26 +671,26 @@ public final class LootrunModel extends Model {
 
                 // Handle Complete Chaos beacon detection
                 if (expectCompleteChaosBeacon) {
-                    int completeChaossPulls = 0;
+                    int completeChaosPulls = 0;
 
                     if (beaconOneKind == LootrunBeaconKind.PURPLE) {
-                        completeChaossPulls = beaconOneVibrant ? 2 : 1;
+                        completeChaosPulls = beaconOneVibrant ? 2 : 1;
                     } else if (beaconOneKind == LootrunBeaconKind.DARK_GRAY) {
-                        completeChaossPulls = beaconOneVibrant ? 6 : 3;
+                        completeChaosPulls = beaconOneVibrant ? 6 : 3;
                     }
 
-                    if (completeChaossPulls > 0) {
-                        LootrunDetails details = getCurrentLootrunDetails();
-                        int oldMissionPulls = details.getMissionPulls();
-                        details.setMissionPulls(oldMissionPulls + completeChaossPulls);
-                        lootrunDetailsStorage.touched();
-                        WynntilsMod.info("[MISSION PULL DEBUG] Complete Chaos beacon pulls: " + oldMissionPulls + " + "
-                                + completeChaossPulls + " = " + details.getMissionPulls());
+                    if (completeChaosPulls > 0) {
+                        // Store the Complete Chaos beacon info instead of adding pulls
+                        completeChaosBeacon = beaconOneKind;
+                        completeChaosBeaconVibrant = beaconOneVibrant;
+
+                        WynntilsMod.info("[COMPLETE CHAOS DEBUG] Detected Complete Chaos beacon: " + completeChaosBeacon
+                                + (completeChaosBeaconVibrant ? " (Vibrant)" : "")
+                                + " | Previous beacon was: " + previousBeacon
+                                + (previousBeaconVibrant ? " (Vibrant)" : ""));
                     }
 
                     expectCompleteChaosBeacon = false;
-                    // Don't update previousBeacon tracking here - it will be updated in handleStateChange
-                    // when the beacon is actually selected
                 }
 
                 expectOrangeBeacon = expectOrangeBeacon || beaconOneKind == LootrunBeaconKind.ORANGE;
@@ -737,6 +741,8 @@ public final class LootrunModel extends Model {
             expectMissionComplete = false;
             expectTrialStarted = false;
             expectTrialRewards = false;
+            completeChaosBeacon = null;
+            completeChaosBeaconVibrant = false;
             newBeacons();
             return;
         }
@@ -1478,12 +1484,10 @@ public final class LootrunModel extends Model {
 
         if (oldChallenges == CappedValue.EMPTY) return;
 
-        // First, check if we completed a challenge.
         if (amount.current() > oldChallenges.current()) {
             addToRedBeaconTaskCount(-1);
         }
 
-        // Then, check if we completed have new challenges from a red beacon.
         if (getLastTaskBeaconColor() == LootrunBeaconKind.RED && amount.max() > oldChallenges.max()) {
             addToRedBeaconTaskCount(amount.max() - oldChallenges.max());
         }
@@ -1518,6 +1522,8 @@ public final class LootrunModel extends Model {
             previousBeaconVibrant = false;
             previousBeaconMinusOne = null;
             previousBeaconMinusOneVibrant = false;
+            completeChaosBeacon = null;
+            completeChaosBeaconVibrant = false;
 
             timeLeft = 0;
             challenges = CappedValue.EMPTY;
@@ -1533,8 +1539,6 @@ public final class LootrunModel extends Model {
             getCurrentLootrunDetails().incrementBeaconCount(color);
             lootrunDetailsStorage.touched();
 
-            // Update previous beacon tracking BEFORE clearing vibrantBeacons
-            // This needs to happen before any clearing so vibrantBeacons.contains() works correctly
             previousBeaconMinusOne = previousBeacon;
             previousBeaconMinusOneVibrant = previousBeaconVibrant;
             previousBeacon = color;
@@ -1547,7 +1551,6 @@ public final class LootrunModel extends Model {
 
             setLastTaskBeaconColor(color);
 
-            // Check if the beacon exists in our predictions before accessing it
             TaskPrediction prediction = beacons.get(color);
             TaskLocation taskLocation = prediction != null ? prediction.taskLocation() : null;
             LootrunTaskType taskType = activeTaskTypes.getOrDefault(color, LootrunTaskType.UNKNOWN);
@@ -1556,7 +1559,6 @@ public final class LootrunModel extends Model {
 
             possibleTaskLocations = new HashSet<>();
 
-            // Clear beacons and vibrantBeacons AFTER we've captured the tracking
             beacons.clear();
             vibrantBeacons.clear();
             activeBeacons.clear();
@@ -1580,17 +1582,16 @@ public final class LootrunModel extends Model {
                         + " | Previous: "
                         + previousBeacon + (previousBeaconVibrant ? " (Vibrant)" : "")
                         + " | Previous-1: "
-                        + previousBeaconMinusOne + (previousBeaconMinusOneVibrant ? " (Vibrant)" : ""));
+                        + previousBeaconMinusOne + (previousBeaconMinusOneVibrant ? " (Vibrant)" : "")
+                        + " | Complete Chaos: "
+                        + completeChaosBeacon + (completeChaosBeaconVibrant ? " (Vibrant)" : ""));
 
-        // Use the calculateBeaconPulls method to get the bonus pulls (without Porphyrophobia)
         int bonusPulls = calculateBeaconPulls(color, wasVibrant);
 
         if (bonusPulls > 0) {
-            // Add base pulls to challenge pulls
             int oldChallengePulls = lootrunDetails.getChallengePulls();
             lootrunDetails.setChallengePulls(oldChallengePulls + bonusPulls);
 
-            // Build bonus description for logging
             String bonusDescription = color + (wasVibrant ? " (Vibrant)" : "");
             if (previousBeaconMinusOne == LootrunBeaconKind.AQUA) {
                 bonusDescription += " with " + (previousBeaconMinusOneVibrant ? "Vibrant " : "") + "Aqua bonus";
@@ -1600,7 +1601,6 @@ public final class LootrunModel extends Model {
                     + lootrunDetails.getChallengePulls());
             WynntilsMod.info("Added " + bonusPulls + " challenge pulls from " + bonusDescription);
 
-            // If Porphyrophobia is active and this is a Purple beacon, add the same amount to mission pulls
             if (color == LootrunBeaconKind.PURPLE
                     && lootrunDetails.getMissions().contains(MissionType.PORPHYROPHOBIA)) {
                 int oldMissionPulls = lootrunDetails.getMissionPulls();
@@ -1614,7 +1614,29 @@ public final class LootrunModel extends Model {
             WynntilsMod.info("[PULL DEBUG] No beacon pulls added (non-pull beacon type)");
         }
 
-        // Handle Rainbow beacon
+        if (completeChaosBeacon != null) {
+            int chaosPulls = calculateBeaconPulls(completeChaosBeacon, completeChaosBeaconVibrant);
+
+            if (chaosPulls > 0) {
+                int oldMissionPulls = lootrunDetails.getMissionPulls();
+                lootrunDetails.setMissionPulls(oldMissionPulls + chaosPulls);
+
+                String chaosBonus = completeChaosBeacon + (completeChaosBeaconVibrant ? " (Vibrant)" : "");
+                if (previousBeacon == LootrunBeaconKind.AQUA) {
+                    chaosBonus += " with " + (previousBeaconVibrant ? "Vibrant " : "") + "Aqua bonus";
+                }
+
+                WynntilsMod.info("[MISSION PULL DEBUG] Complete Chaos bonus: " + oldMissionPulls + " + "
+                        + chaosPulls + " = " + lootrunDetails.getMissionPulls()
+                        + " from " + chaosBonus);
+
+                lootrunDetailsStorage.touched();
+            }
+
+            completeChaosBeacon = null;
+            completeChaosBeaconVibrant = false;
+        }
+
         if (color == LootrunBeaconKind.RAINBOW) {
             if (lootrunDetails.getRainbowAmount() != -1) {
                 int oldCount = lootrunDetails.getRainbowBeaconCount();
@@ -1623,9 +1645,7 @@ public final class LootrunModel extends Model {
             } else {
                 WynntilsMod.warn("Completed rainbow beacon challenge but had no rainbow amount");
             }
-        }
-        // Handle Orange beacon
-        else if (color == LootrunBeaconKind.ORANGE) {
+        } else if (color == LootrunBeaconKind.ORANGE) {
             if (lootrunDetails.getOrangeAmount() != -1) {
                 List<Integer> orangeList =
                         new ArrayList<>(getCurrentLootrunDetails().getOrangeBeaconCounts());
