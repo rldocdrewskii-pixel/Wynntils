@@ -1,3 +1,7 @@
+/*
+ * Copyright © Wynntils 2026.
+ * This file is released under LGPLv3. See LICENSE for full license details.
+ */
 package com.wynntils.overlays.lootrun;
 
 import com.wynntils.core.components.Models;
@@ -13,7 +17,7 @@ public class LootrunPullCountOverlay extends TextOverlay {
             {concat(
             "§fChallenge Pulls: ";string(lootrun_challenge_pulls);
             if(gt(lootrun_daily_bonus_pulls; 0); concat(" §8(§b+";string(lootrun_daily_bonus_pulls);"§8)"); ""); "\n";
-            if(gt(lootrun_mission_pulls; 0); concat("§9Mission Pulls: ";string(lootrun_mission_pulls);"\n"); "");
+            if(gt(lootrun_mission_pulls; 0); concat("§7Mission Pulls: ";string(lootrun_mission_pulls);"\n"); "");
             if(neq(lootrun_trial_pulls; 0); concat("§4Trial Pulls: ";string(lootrun_trial_pulls);"\n"); "");
             if(gt(lootrun_sacrificed_pulls; 0); concat("§cSacrificed Pulls: ";string(lootrun_sacrificed_pulls);"\n"); "");
             "\n";
@@ -29,7 +33,7 @@ public class LootrunPullCountOverlay extends TextOverlay {
     private static final String PREVIEW_TEMPLATE =
             """
             §fChallenge Pulls: 5 §8(§b+2§8)
-            §9Mission Pulls: 7
+            §7Mission Pulls: 7
             §4Trial Pulls: 4
             §cSacrificed Pulls: 3
             §f

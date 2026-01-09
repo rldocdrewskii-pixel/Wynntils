@@ -1,5 +1,5 @@
 /*
- * Copyright © Wynntils 2025.
+ * Copyright © Wynntils 2025-2026.
  * This file is released under LGPLv3. See LICENSE for full license details.
  */
 package com.wynntils.models.lootrun.type;
@@ -157,43 +157,61 @@ public class LootrunDetails {
         this.rerolls = rerolls;
     }
 
-    public int getChallengePulls() { return challengePulls; }
+    public int getChallengePulls() {
+        return challengePulls;
+    }
 
     public void setChallengePulls(int challengePulls) {
         this.challengePulls = challengePulls;
     }
 
-    public int getDailyBonusPulls() { return dailyBonusPulls; }
+    public int getDailyBonusPulls() {
+        return dailyBonusPulls;
+    }
 
     public void setDailyBonusPulls(int dailyBonusPulls) {
         this.dailyBonusPulls = dailyBonusPulls;
     }
 
-    public int getDailyBonusRerolls() { return dailyBonusRerolls; }
+    public int getDailyBonusRerolls() {
+        return dailyBonusRerolls;
+    }
 
     public void setDailyBonusRerolls(int dailyBonusRerolls) {
         this.dailyBonusRerolls = dailyBonusRerolls;
     }
 
-    public int getDailyBonusSacrifices() { return dailyBonusSacrifices; }
+    public int getDailyBonusSacrifices() {
+        return dailyBonusSacrifices;
+    }
 
     public void setDailyBonusSacrifices(int dailyBonusSacrifices) {
         this.dailyBonusSacrifices = dailyBonusSacrifices;
     }
 
-    public int getSacrificedPulls() { return sacrificedPulls; }
+    public int getSacrificedPulls() {
+        return sacrificedPulls;
+    }
 
     public void setSacrificedPulls(int sacrificedPulls) {
         this.sacrificedPulls = sacrificedPulls;
     }
 
-    public int getMissionPulls() { return missionPulls; }
+    public int getMissionPulls() {
+        return missionPulls;
+    }
 
-    public void setMissionPulls(int missionPulls) {this.missionPulls = missionPulls;}
+    public void setMissionPulls(int missionPulls) {
+        this.missionPulls = missionPulls;
+    }
 
-    public int getTrialPulls() { return trialPulls; }
+    public int getTrialPulls() {
+        return trialPulls;
+    }
 
-    public void setTrialPulls(int trialPulls) {this.trialPulls = trialPulls;}
+    public void setTrialPulls(int trialPulls) {
+        this.trialPulls = trialPulls;
+    }
 
     public int getTrialRerolls() {
         return trialRerolls;
@@ -211,24 +229,43 @@ public class LootrunDetails {
         this.trialSacrifices = trialSacrifices;
     }
 
-    public boolean isTreasuryBillActive() { return treasuryBillActive; }
+    public boolean isTreasuryBillActive() {
+        return treasuryBillActive;
+    }
 
-    public void setTreasuryBillActive(boolean treasuryBillActive) { this.treasuryBillActive = treasuryBillActive; }
+    public void setTreasuryBillActive(boolean treasuryBillActive) {
+        this.treasuryBillActive = treasuryBillActive;
+    }
 
-    public int getTreasuryBillPullsGained() { return treasuryBillPullsGained; }
+    public int getTreasuryBillPullsGained() {
+        return treasuryBillPullsGained;
+    }
 
-    public void setTreasuryBillPullsGained(int treasuryBillPullsGained) { this.treasuryBillPullsGained = treasuryBillPullsGained; }
+    public void setTreasuryBillPullsGained(int treasuryBillPullsGained) {
+        this.treasuryBillPullsGained = treasuryBillPullsGained;
+    }
 
-    public long getTreasuryBillLastDeductionTime() { return treasuryBillLastDeductionTime; }
+    public long getTreasuryBillLastDeductionTime() {
+        return treasuryBillLastDeductionTime;
+    }
 
-    public void setTreasuryBillLastDeductionTime(long treasuryBillLastDeductionTime) { this.treasuryBillLastDeductionTime = treasuryBillLastDeductionTime; }
+    public void setTreasuryBillLastDeductionTime(long treasuryBillLastDeductionTime) {
+        this.treasuryBillLastDeductionTime = treasuryBillLastDeductionTime;
+    }
 
-    public long getTreasuryBillStartTime() { return treasuryBillStartTime; }
+    public long getTreasuryBillStartTime() {
+        return treasuryBillStartTime;
+    }
 
-    public void setTreasuryBillStartTime(long treasuryBillStartTime) { this.treasuryBillStartTime = treasuryBillStartTime; }
+    public void setTreasuryBillStartTime(long treasuryBillStartTime) {
+        this.treasuryBillStartTime = treasuryBillStartTime;
+    }
 
-    public int getTreasuryBillStartingPulls() { return treasuryBillStartingPulls; }
+    public int getTreasuryBillStartingPulls() {
+        return treasuryBillStartingPulls;
+    }
 
-    public void setTreasuryBillStartingPulls(int treasuryBillStartingPulls) {this.treasuryBillStartingPulls = treasuryBillStartingPulls;}
-
+    public void setTreasuryBillStartingPulls(int treasuryBillStartingPulls) {
+        this.treasuryBillStartingPulls = treasuryBillStartingPulls;
+    }
 }
