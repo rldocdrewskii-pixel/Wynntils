@@ -212,6 +212,7 @@ public final class LootrunModel extends Model {
     private boolean expectOrangeBeacon = false;
     private boolean expectRainbowBeacon = false;
     private boolean expectChallengePulls = false;
+    private boolean inBeaconSelection = false;
 
     // Data to be persisted
     @Persisted
@@ -650,6 +651,7 @@ public final class LootrunModel extends Model {
 
         challenges = CappedValue.EMPTY;
         timeLeft = 0;
+        inBeaconSelection = false;
     }
 
     // When we get close to a beacon, it gets removed.
@@ -1036,11 +1038,17 @@ public final class LootrunModel extends Model {
         resetTrialPulls();
         resetTrialRerolls();
         resetTrialSacrifices();
-
-        lootrunDetailsStorage.touched();
     }
 
     private void newBeacons() {
+        if (inBeaconSelection && getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)) {
+            LootrunDetails details = getCurrentLootrunDetails();
+            details.setMissionPulls(details.getMissionPulls() + 1);
+            lootrunDetailsStorage.touched();
+        }
+
+        inBeaconSelection = true;
+
         possibleTaskLocations.clear();
         vibrantBeacons.clear();
 
@@ -1135,7 +1143,6 @@ public final class LootrunModel extends Model {
             setClosestBeacon(null);
             setLastTaskBeaconColor(null);
             resetLootrunDetails();
-            lootrunDetailsStorage.touched();
 
             possibleTaskLocations = new HashSet<>();
 
@@ -1144,6 +1151,7 @@ public final class LootrunModel extends Model {
 
             timeLeft = 0;
             challenges = CappedValue.EMPTY;
+            inBeaconSelection = false;
             return;
         }
 
@@ -1164,7 +1172,6 @@ public final class LootrunModel extends Model {
 
             possibleTaskLocations = new HashSet<>();
 
-            // We selected a beacon, so other beacons are no longer relevant.
             beacons.clear();
             vibrantBeacons.clear();
             activeBeacons.clear();
@@ -1173,6 +1180,7 @@ public final class LootrunModel extends Model {
             expectOrangeBeacon = false;
             expectRainbowBeacon = false;
             reduceBeaconCounts();
+            inBeaconSelection = false;
             LOOTRUN_BEACON_COMPASS_PROVIDER.reloadTaskMarkers();
             return;
         }
