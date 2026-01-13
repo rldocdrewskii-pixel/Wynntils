@@ -110,6 +110,7 @@ public final class LootrunModel extends Model {
     private static final Pattern REWARD_REROLLS_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Rerolls§r");
     private static final Pattern REWARD_SACRIFICES_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Sacrifices§r");
     private static final Pattern LOOTRUN_EXPERIENCE_PATTERN = Pattern.compile("§.(\\d+)§7 Lootrun Experience§r");
+    private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+(\\d+) Reward Pulls?\\]");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -210,6 +211,7 @@ public final class LootrunModel extends Model {
     private boolean expectTrialStarted = false;
     private boolean expectOrangeBeacon = false;
     private boolean expectRainbowBeacon = false;
+    private boolean expectChallengePulls = false;
 
     // Data to be persisted
     @Persisted
@@ -389,7 +391,19 @@ public final class LootrunModel extends Model {
         matcher = CHALLENGE_COMPLETED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
             challengeCompleted();
-            return;
+            expectChallengePulls = true;
+        }
+
+        if (expectChallengePulls) {
+            matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
+            if (matcher.find()) {
+                int pulls = Integer.parseInt(matcher.group(1));
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setChallengePulls(details.getChallengePulls() + pulls);
+                lootrunDetailsStorage.touched();
+                expectChallengePulls = false;
+                return;
+            }
         }
 
         matcher = CHALLENGE_FAILED_PATTERN.matcher(styledText.getString());
@@ -1121,6 +1135,7 @@ public final class LootrunModel extends Model {
             setClosestBeacon(null);
             setLastTaskBeaconColor(null);
             resetLootrunDetails();
+            lootrunDetailsStorage.touched();
 
             possibleTaskLocations = new HashSet<>();
 
