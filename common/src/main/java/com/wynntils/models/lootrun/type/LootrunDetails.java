@@ -24,8 +24,18 @@ public class LootrunDetails {
     private int rainbowAmount = -1;
     private List<MissionType> missions = new ArrayList<>();
     private List<TrialType> trials = new ArrayList<>();
-    private int sacrifices = 0;
-    private int rerolls = 0;
+
+    private int challengePulls = 0;
+    private int dailyBonusPulls = 0;
+    private int dailyBonusRerolls = 0;
+    private int dailyBonusSacrifices = 0;
+    private int sacrificedPulls = 0;
+    private int missionPulls = 0;
+    private int missionRerolls = 0;
+    private int missionSacrifices = 0;
+    private int trialPulls = 0;
+    private int trialRerolls = 0;
+    private int trialSacrifices = 0;
 
     public Map<LootrunBeaconKind, Integer> getSelectedBeacons() {
         return Collections.unmodifiableMap(selectedBeacons);
@@ -127,19 +137,47 @@ public class LootrunDetails {
         trials.add(newTrial);
     }
 
-    public int getSacrifices() {
-        return sacrifices;
-    }
+    public int getChallengePulls() { return challengePulls; }
 
-    public void setSacrifices(int sacrifices) {
-        this.sacrifices = sacrifices;
-    }
+    public void setChallengePulls(int challengePulls) { this.challengePulls = challengePulls; }
 
-    public int getRerolls() {
-        return rerolls;
-    }
+    public int getDailyBonusPulls() { return dailyBonusPulls; }
 
-    public void setRerolls(int rerolls) {
-        this.rerolls = rerolls;
-    }
+    public void setDailyBonusPulls(int dailyBonusPulls) { this.dailyBonusPulls = dailyBonusPulls; }
+
+    public int getDailyBonusRerolls() { return dailyBonusRerolls; }
+
+    public void setDailyBonusRerolls(int dailyBonusRerolls) { this.dailyBonusRerolls = dailyBonusRerolls;}
+
+    public int getDailyBonusSacrifices() { return dailyBonusSacrifices; }
+
+    public void setDailyBonusSacrifices(int dailyBonusSacrifices) { this.dailyBonusSacrifices = dailyBonusSacrifices; }
+
+    public int getSacrificedPulls() { return sacrificedPulls; }
+
+    public void setSacrificedPulls(int sacrificedPulls) { this.sacrificedPulls = sacrificedPulls; }
+
+    public int getMissionPulls() { return missionPulls; }
+
+    public void setMissionPulls(int missionPulls) { this.missionPulls = missionPulls; }
+
+    public int getMissionRerolls() { return missionRerolls; }
+
+    public void setMissionRerolls(int missionRerolls) { this.missionRerolls = missionRerolls; }
+
+    public int getMissionSacrifices() { return missionSacrifices; }
+
+    public void setMissionSacrifices(int missionSacrifices) { this.missionSacrifices = missionSacrifices; }
+
+    public int getTrialPulls() { return trialPulls; }
+
+    public void setTrialPulls(int trialPulls) { this.trialPulls = trialPulls; }
+
+    public int getTrialRerolls() { return trialRerolls; }
+
+    public void setTrialRerolls(int trialRerolls) { this.trialRerolls = trialRerolls; }
+
+    public int getTrialSacrifices() { return trialSacrifices; }
+
+    public void setTrialSacrifices(int trialSacrifices) { this.trialSacrifices = trialSacrifices; }
 }

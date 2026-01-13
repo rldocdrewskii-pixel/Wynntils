@@ -368,20 +368,20 @@ public final class LootrunModel extends Model {
             return;
         }
 
-        matcher = CHALLENGE_GET_SACRIFICE_PATTERN.matcher(styledText.getString());
-        if (matcher.find()) {
-            int amount = Integer.parseInt(matcher.group(1));
-            LootrunDetails details = getCurrentLootrunDetails();
-            details.setSacrifices(details.getSacrifices() + amount);
-            lootrunDetailsStorage.touched();
-            return;
-        }
-
         matcher = CHALLENGE_GET_REROLL_PATTERN.matcher(styledText.getString());
         if (matcher.find()) {
             int amount = Integer.parseInt(matcher.group(1));
             LootrunDetails details = getCurrentLootrunDetails();
-            details.setRerolls(details.getRerolls() + amount);
+            details.setMissionRerolls(details.getMissionRerolls() + amount);
+            lootrunDetailsStorage.touched();
+            return;
+        }
+
+        matcher = CHALLENGE_GET_SACRIFICE_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            int amount = Integer.parseInt(matcher.group(1));
+            LootrunDetails details = getCurrentLootrunDetails();
+            details.setMissionSacrifices(details.getMissionSacrifices() + amount);
             lootrunDetailsStorage.touched();
             return;
         }
@@ -864,13 +864,57 @@ public final class LootrunModel extends Model {
         return getCurrentLootrunDetails().getOrangeBeaconCounts().size();
     }
 
-    public int getSacrifices() {
-        return getCurrentLootrunDetails().getSacrifices();
+    public int getChallengePulls() { return getCurrentLootrunDetails().getChallengePulls(); }
+
+    public int getDailyBonusPulls () { return getCurrentLootrunDetails().getDailyBonusPulls(); }
+
+    public int getDailyBonusRerolls () { return getCurrentLootrunDetails().getDailyBonusRerolls(); }
+
+    public int getDailyBonusSacrifices () { return getCurrentLootrunDetails().getDailyBonusSacrifices(); }
+
+    public int getSacrificedPulls () { return getCurrentLootrunDetails().getSacrificedPulls(); }
+
+    public int getMissionPulls() { return getCurrentLootrunDetails().getMissionPulls(); }
+
+    public int getMissionRerolls() { return getCurrentLootrunDetails().getMissionRerolls(); }
+
+    public int getMissionSacrifices() {
+        return getCurrentLootrunDetails().getMissionSacrifices();
     }
 
-    public int getRerolls() {
-        return getCurrentLootrunDetails().getRerolls();
+    public int getTrialPulls() { return getCurrentLootrunDetails().getTrialPulls(); }
+
+    public int getTrialRerolls() { return getCurrentLootrunDetails().getTrialRerolls(); }
+
+    public int getTrialSacrifices() { return getCurrentLootrunDetails().getTrialSacrifices(); }
+
+    public int getTotalPulls() { return getChallengePulls() + getDailyBonusPulls() + getSacrificedPulls() + getMissionPulls() + getTrialPulls(); }
+
+    public int getTotalRerolls() { return getDailyBonusRerolls() + getMissionRerolls() + getTrialRerolls(); }
+
+    public int getTotalSacrifices() { return getDailyBonusSacrifices() + getMissionSacrifices() + getTrialSacrifices(); }
+
+    public double getSacrificePercentage() {
+        int sacrifices = getTotalSacrifices();
+
+        if (sacrifices == 0) return 0.0;
+
+        double fractionStored = 1.0 - (1.0 / (sacrifices + 1.0));
+
+        return fractionStored * 100.0;
     }
+
+    public int getTotalSacrificedPulls() {
+        int totalPulls = getTotalPulls();
+        double percent = getSacrificePercentage();
+
+        if (percent == 0.0) return 0;
+
+        double sacrificed = totalPulls * (percent / 100.0);
+        return (int) Math.ceil(sacrificed);
+    }
+
+    public int getEffectivePulls() { return getTotalPulls() * (1 + getTotalRerolls()); }
 
     public int getChallengesTillNextOrangeExpires() {
         List<Integer> orangeBeaconCounts = getCurrentLootrunDetails().getOrangeBeaconCounts();
@@ -902,13 +946,83 @@ public final class LootrunModel extends Model {
         lootrunDetailsStorage.touched();
     }
 
-    private void resetSacrifices() {
-        getCurrentLootrunDetails().setSacrifices(0);
+    private void resetChallengePulls() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setChallengePulls(0);
         lootrunDetailsStorage.touched();
     }
 
-    private void resetRerolls() {
-        getCurrentLootrunDetails().setRerolls(0);
+    private void resetDailyBonusPulls() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusPulls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetDailyBonusRerolls() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusRerolls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetDailyBonusSacrifices() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusSacrifices(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetSacrificedPulls() {
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setSacrificedPulls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetMissionPulls() {
+        getCurrentLootrunDetails().setMissionPulls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetMissionRerolls() {
+        getCurrentLootrunDetails().setMissionRerolls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetMissionSacrifices() {
+        getCurrentLootrunDetails().setMissionSacrifices(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetTrialPulls() {
+        getCurrentLootrunDetails().setTrialPulls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetTrialRerolls() {
+        getCurrentLootrunDetails().setTrialRerolls(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetTrialSacrifices() {
+        getCurrentLootrunDetails().setTrialSacrifices(0);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void resetLootrunDetails() {
+        resetBeaconCounts();
+        resetMissions();
+        resetTrials();
+        resetBeaconCounts();
+        resetChallengePulls();
+        resetDailyBonusPulls();
+        resetDailyBonusRerolls();
+        resetDailyBonusSacrifices();
+        resetSacrificedPulls();
+        resetMissionPulls();
+        resetMissionRerolls();
+        resetMissionSacrifices();
+        resetTrialPulls();
+        resetTrialRerolls();
+        resetTrialSacrifices();
+
         lootrunDetailsStorage.touched();
     }
 
@@ -951,12 +1065,12 @@ public final class LootrunModel extends Model {
 
         int rerolls = mission.getRerolls();
         if (rerolls > 0) {
-            getCurrentLootrunDetails().setRerolls(getCurrentLootrunDetails().getRerolls() + rerolls);
+            getCurrentLootrunDetails().setMissionPulls(getCurrentLootrunDetails().getMissionPulls() + rerolls);
         }
 
         int sacrifices = mission.getSacrifices();
         if (sacrifices > 0) {
-            getCurrentLootrunDetails().setSacrifices(getCurrentLootrunDetails().getSacrifices() + sacrifices);
+            getCurrentLootrunDetails().setMissionSacrifices(getCurrentLootrunDetails().getMissionSacrifices() + sacrifices);
         }
 
         lootrunDetailsStorage.touched();
@@ -1006,9 +1120,7 @@ public final class LootrunModel extends Model {
             taskType = null;
             setClosestBeacon(null);
             setLastTaskBeaconColor(null);
-            resetBeaconCounts();
-            resetSacrifices();
-            resetRerolls();
+            resetLootrunDetails();
 
             possibleTaskLocations = new HashSet<>();
 
