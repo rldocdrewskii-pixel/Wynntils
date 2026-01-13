@@ -31,6 +31,8 @@ import com.wynntils.models.beacons.event.BeaconMarkerEvent;
 import com.wynntils.models.beacons.type.Beacon;
 import com.wynntils.models.beacons.type.BeaconMarker;
 import com.wynntils.models.character.event.CharacterUpdateEvent;
+import com.wynntils.models.containers.Container;
+import com.wynntils.models.containers.containers.LootrunMasterContainer;
 import com.wynntils.models.containers.containers.LootrunRewardChestContainer;
 import com.wynntils.models.containers.event.ValuableFoundEvent;
 import com.wynntils.models.gear.type.GearTier;
@@ -111,6 +113,12 @@ public final class LootrunModel extends Model {
     private static final Pattern REWARD_SACRIFICES_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Sacrifices§r");
     private static final Pattern LOOTRUN_EXPERIENCE_PATTERN = Pattern.compile("§.(\\d+)§7 Lootrun Experience§r");
     private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+?(\\d+) Reward Pulls?\\]");
+
+    // Lootrun Master Container
+    private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Pulls");
+    private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Rerolls?");
+    private static final Pattern DAILY_BONUS_SACRIFICES_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Sacrifices?");
+    private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("Â§c-.*?(\\d+).*?Reward Pulls");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -672,7 +680,9 @@ public final class LootrunModel extends Model {
 
     @SubscribeEvent
     public void onScreenInit(ScreenInitEvent.Pre e) {
-        if (Models.Container.getCurrentContainer() instanceof LootrunRewardChestContainer lootrunRewardChestContainer) {
+        Container currentContainer = Models.Container.getCurrentContainer();
+
+        if (currentContainer instanceof LootrunRewardChestContainer) {
             checkedItemEntities.clear();
             rewardChestIsOpened = true;
         } else {
@@ -708,41 +718,97 @@ public final class LootrunModel extends Model {
     public void onSlotClicked(ContainerClickEvent e) {
         if (e.getItemStack().isEmpty()) return;
 
-        if (Models.Container.getCurrentContainer() instanceof LootrunRewardChestContainer lootrunRewardChestContainer) {
-            if (lootrunRewardChestContainer.REROLL_REWARDS_SLOTS.contains(e.getSlotNum())) {
-                StyledText rerollLoreConfirm =
-                        LoreUtils.getLore(e.getItemStack()).getFirst();
+        Container currentContainer = Models.Container.getCurrentContainer();
 
-                if (rerollLoreConfirm.matches(lootrunRewardChestContainer.REROLL_CONFIRM_PATTERN)) {
-                    rerollingRewards = true;
-                    checkedItemEntities.clear();
-                }
-            } else if (e.getSlotNum() == lootrunRewardChestContainer.CLOSE_CHEST_SLOT) {
-                StyledText itemName = StyledText.fromComponent(e.getItemStack().getHoverName());
+        if (!(currentContainer instanceof LootrunMasterContainer container)) {
+            if (currentContainer instanceof LootrunRewardChestContainer container) {
+                handleRewardChestClick(e, container);
+            }
+        } else {
+            handleLootrunMasterClick(e, container);
+            return;
+        }
 
-                if (!itemName.equals(lootrunRewardChestContainer.CLOSE_CHEST_ITEM_NAME)) return;
+    }
 
-                // This is when the user closes the chest after claiming rewards
+    private void handleLootrunMasterClick(ContainerClickEvent e, LootrunMasterContainer container) {
+        if (!container.START_LOOTRUN_ITEM_SLOTS.contains(e.getSlotNum())) return;
 
-                if (expectedPulls.get() == -1) {
-                    WynntilsMod.warn(
-                            "[LootrunModel] Failed to update dry lootrun count after closing the reward chest. Did not detect number of expected pulls. Got expectedPulls="
-                                    + expectedPulls.get()
-                                    + ". Probably, the player tried closing the chest before, which got cancelled and the contents of the chest got refreshed.");
-                    return;
-                }
+        StyledText itemName = StyledText.fromComponent(e.getItemStack().getHoverName());
+        if (!itemName.matches(container.START_LOOTRUN_ITEM_PATTERN)) return;
 
-                if (foundLootrunMythic) {
-                    dryPulls.store(0);
-                } else {
-                    dryPulls.store(dryPulls.get() + expectedPulls.get());
-                }
+        List<StyledText> lore = LoreUtils.getLore(e.getItemStack());
 
-                expectedPulls.store(-1);
+        int dailyBonusPulls = 0;
+        int dailyBonusRerolls = 0;
+        int dailyBonusSacrifices = 0;
+        int sacrificedPulls = 0;
 
-                rewardChestIsOpened = false;
+        for (StyledText loreLine : lore) {
+            Matcher dailyPulls = loreLine.getMatcher(DAILY_BONUS_PULLS_PATTERN);
+            if (dailyPulls.find()) {
+                dailyBonusPulls = Integer.parseInt(dailyPulls.group(1));
+                continue;
+            }
+
+            Matcher dailyRerolls = loreLine.getMatcher(DAILY_BONUS_REROLLS_PATTERN);
+            if (dailyRerolls.find()) {
+                dailyBonusRerolls = Integer.parseInt(dailyRerolls.group(1));
+                continue;
+            }
+
+            Matcher dailySacrifices = loreLine.getMatcher(DAILY_BONUS_SACRIFICES_PATTERN);
+            if (dailySacrifices.find()) {
+                dailyBonusSacrifices = Integer.parseInt(dailySacrifices.group(1));
+                continue;
+            }
+
+            Matcher sacPulls = loreLine.getMatcher(SACRIFICED_PULLS_LORE_PATTERN);
+            if (sacPulls.find()) {
+                sacrificedPulls = Integer.parseInt(sacPulls.group(1));
             }
         }
+
+        LootrunDetails details = getCurrentLootrunDetails();
+        details.setDailyBonusPulls(details.getDailyBonusPulls() + dailyBonusPulls);
+        details.setDailyBonusRerolls(details.getDailyBonusRerolls() + dailyBonusRerolls);
+        details.setDailyBonusSacrifices(details.getDailyBonusSacrifices() + dailyBonusSacrifices);
+        details.setSacrificedPulls(details.getSacrificedPulls() + sacrificedPulls);
+        lootrunDetailsStorage.touched();
+    }
+
+    private void handleRewardChestClick(ContainerClickEvent e, LootrunRewardChestContainer container) {
+        if (container.REROLL_REWARDS_SLOTS.contains(e.getSlotNum())) {
+            StyledText rerollLoreConfirm = LoreUtils.getLore(e.getItemStack()).getFirst();
+            if (rerollLoreConfirm.matches(container.REROLL_CONFIRM_PATTERN)) {
+                rerollingRewards = true;
+                checkedItemEntities.clear();
+            }
+            return;
+        }
+
+        if (e.getSlotNum() != container.CLOSE_CHEST_SLOT) return;
+
+        StyledText itemName = StyledText.fromComponent(e.getItemStack().getHoverName());
+        if (!itemName.equals(container.CLOSE_CHEST_ITEM_NAME)) return;
+
+        if (expectedPulls.get() == -1) {
+            WynntilsMod.warn(
+                    "[LootrunModel] Failed to update dry lootrun count after closing the reward chest. " +
+                            "Did not detect number of expected pulls. Got expectedPulls=" + expectedPulls.get() +
+                            ". Probably, the player tried closing the chest before, which got cancelled " +
+                            "and the contents of the chest got refreshed.");
+            return;
+        }
+
+        if (foundLootrunMythic) {
+            dryPulls.store(0);
+        } else {
+            dryPulls.store(dryPulls.get() + expectedPulls.get());
+        }
+
+        expectedPulls.store(-1);
+        rewardChestIsOpened = false;
     }
 
     @SubscribeEvent
