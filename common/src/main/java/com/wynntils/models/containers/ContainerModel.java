@@ -32,6 +32,7 @@ import com.wynntils.models.containers.containers.JukeboxContainer;
 import com.wynntils.models.containers.containers.LeaderboardRewardsContainer;
 import com.wynntils.models.containers.containers.LobbyContainer;
 import com.wynntils.models.containers.containers.LootrunRewardChestContainer;
+import com.wynntils.models.containers.containers.LootrunMasterContainer;
 import com.wynntils.models.containers.containers.PartyFinderMatchFoundContainer;
 import com.wynntils.models.containers.containers.RaidRewardChestContainer;
 import com.wynntils.models.containers.containers.RaidRewardPreviewContainer;
@@ -151,6 +152,7 @@ public final class ContainerModel extends Model {
         registerContainer(new LobbyContainer());
         registerContainer(new LootChestContainer());
         registerContainer(new LootrunRewardChestContainer());
+        registerContainer(new LootrunMasterContainer());
         registerContainer(new MiscBucketContainer());
         registerContainer(new ObjectiveRewardContainer());
         registerContainer(new PartyFinderMatchFoundContainer());
