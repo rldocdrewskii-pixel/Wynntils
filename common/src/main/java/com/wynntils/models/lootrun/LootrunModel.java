@@ -213,6 +213,7 @@ public final class LootrunModel extends Model {
     private boolean expectRainbowBeacon = false;
     private boolean expectChallengePulls = false;
     private boolean inBeaconSelection = false;
+    private boolean expectMissionPulls = false;
 
     // Data to be persisted
     @Persisted
@@ -352,7 +353,26 @@ public final class LootrunModel extends Model {
         if (matcher.find()) {
             MissionType mission = MissionType.fromName(matcher.group("mission"));
             addMission(mission);
+
+            if (mission == MissionType.JESTERS_TRICK || mission == MissionType.CHRONOKINESIS) {
+                expectMissionPulls = true;
+            }
             return;
+        }
+
+        if (expectMissionPulls) {
+            matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
+            if (matcher.find()) {
+                int pulls = Integer.parseInt(matcher.group(1));
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setMissionPulls(details.getMissionPulls() + pulls);
+                lootrunDetailsStorage.touched();
+                return;
+            }
+            // Reset when CHOOSE_BEACON_PATTERN detected, This allows it to detect multiple matchers
+            if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
+                expectMissionPulls = false;
+            }
         }
 
         matcher = TRIAL_STARTED_PATTERN.matcher(styledText.getString());
