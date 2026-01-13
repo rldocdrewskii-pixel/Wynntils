@@ -1024,6 +1024,8 @@
   "feature.wynntils.lootrunOverlays.overlay.lootrunBeaconCount.name": "Lootrun Beacon Count",
   "feature.wynntils.lootrunOverlays.overlay.lootrunMissions.description": "Shows the current lootrun missions.",
   "feature.wynntils.lootrunOverlays.overlay.lootrunMissions.name": "Lootrun Missions",
+  "feature.wynntils.lootrunOverlays.overlay.lootrunPullCount.description": "Shows the current lootrun pulls count.",
+  "feature.wynntils.lootrunOverlays.overlay.lootrunPullCount.name": "Lootrun Pull Count",
   "feature.wynntils.lootrunOverlays.overlay.lootrunTaskName.description": "Shows the names of current lootrun tasks.",
   "feature.wynntils.lootrunOverlays.overlay.lootrunTaskName.forceCoordinates.description": "Force showing coordinates instead of location names",
   "feature.wynntils.lootrunOverlays.overlay.lootrunTaskName.forceCoordinates.name": "Force Coordinates",
