@@ -1083,6 +1083,11 @@ public final class LootrunModel extends Model {
     private void addMission(MissionType mission) {
         if (!getCurrentLootrunDetails().getMissions().contains(mission)) {
             getCurrentLootrunDetails().addMission(mission);
+            if (mission == MissionType.HIGH_ROLLER) {
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setMissionPulls(details.getMissionPulls() + 10);
+                lootrunDetailsStorage.touched();
+            }
         }
 
         int rerolls = mission.getRerolls();
