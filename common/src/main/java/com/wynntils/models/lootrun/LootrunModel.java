@@ -321,50 +321,65 @@ public final class LootrunModel extends Model {
         if (event.getRecipientType() != RecipientType.INFO) return;
         StyledText styledText = event.getMessage();
 
+        handleLootrunStateMessages(styledText);
+        if (lootrunCompletedBuilder != null) {
+            parseCompletedMessages(styledText);
+            return;
+        }
+
+        if (lootrunFailedBuilder != null) {
+            parseFailedMessages(styledText);
+            return;
+        }
+
+        handleMissionCompletion(styledText);
+        handleTrialAndMissionPulls(styledText);
+        handleChallengeRewards(styledText);
+        handleChallengeState(styledText);
+        handleBeaconSelection(styledText);
+        handleBeaconAmounts(styledText);
+    }
+
+    private void handleLootrunStateMessages(StyledText styledText) {
         if (styledText.matches(LOOTRUN_COMPLETED_PATTERN)) {
             lootrunCompletedBuilder = new LootrunFinishedEventBuilder.Completed();
             lootrunFailedBuilder = null;
-            return;
         }
+
         if (styledText.matches(LOOTRUN_FAILED_PATTERN)) {
             lootrunFailedBuilder = new LootrunFinishedEventBuilder.Failed();
             lootrunCompletedBuilder = null;
-            return;
         }
+    }
 
-        if (lootrunCompletedBuilder != null) {
-            parseCompletedMessages(styledText);
-        } else if (lootrunFailedBuilder != null) {
-            parseFailedMessages(styledText);
-        }
-
+    private void handleMissionCompletion(StyledText styledText) {
         Matcher matcher = MISSION_COMPLETED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
             expectMissionComplete = true;
             return;
         }
 
-        if (expectMissionComplete) {
-            matcher = COMPLETED_MISSION_PATTERN.matcher(styledText.getString());
-            if (matcher.matches()) {
-                MissionType mission = MissionType.fromName(matcher.group("mission"));
-                addMission(mission);
-                expectMissionComplete = false;
-                return;
-            }
-        }
+        if (!expectMissionComplete) return;
 
+        matcher = COMPLETED_MISSION_PATTERN.matcher(styledText.getString());
+        if (matcher.matches()) {
+            MissionType mission = MissionType.fromName(matcher.group("mission"));
+            addMission(mission);
+            expectMissionComplete = false;
+        }
+    }
+
+    private void handleTrialAndMissionPulls(StyledText styledText) {
         List<String> pendingPullTypes = new ArrayList<>();
 
-        matcher = TRIAL_STARTED_PATTERN.matcher(styledText.getString());
-        if (matcher.find()) {
+        if (styledText.getMatcher(TRIAL_STARTED_PATTERN).find()) {
             expectTrialStarted = true;
         }
 
         if (expectTrialStarted) {
-            matcher = TRIAL_NAME_PATTERN.matcher(styledText.getString());
-            if (matcher.find()) {
-                TrialType trial = TrialType.fromName(matcher.group("trial"));
+            Matcher trialMatcher = TRIAL_NAME_PATTERN.matcher(styledText.getString());
+            if (trialMatcher.find()) {
+                TrialType trial = TrialType.fromName(trialMatcher.group("trial"));
                 addTrial(trial);
                 expectTrialStarted = false;
 
@@ -374,9 +389,9 @@ public final class LootrunModel extends Model {
             }
         }
 
-        matcher = ACTIVE_MISSION_PATTERN.matcher(styledText.getString());
-        while (matcher.find()) {
-            MissionType mission = MissionType.fromName(matcher.group("mission"));
+        Matcher missionMatcher = ACTIVE_MISSION_PATTERN.matcher(styledText.getString());
+        while (missionMatcher.find()) {
+            MissionType mission = MissionType.fromName(missionMatcher.group("mission"));
             addMission(mission);
 
             if (mission == MissionType.JESTERS_TRICK || mission == MissionType.CHRONOKINESIS) {
@@ -385,70 +400,76 @@ public final class LootrunModel extends Model {
         }
 
         if (!pendingPullTypes.isEmpty()) {
-            matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
-
-            List<Integer> pullAmounts = new ArrayList<>();
-            while (matcher.find()) {
-                pullAmounts.add(Integer.parseInt(matcher.group(1)));
-            }
-
-            if (!pullAmounts.isEmpty()) {
-                LootrunDetails details = getCurrentLootrunDetails();
-
-                int index = 0;
-                for (int amount : pullAmounts) {
-                    if (index < pendingPullTypes.size()) {
-                        String source = pendingPullTypes.get(index);
-
-                        if (source.equals("trial")) {
-                            details.setTrialPulls(details.getTrialPulls() + amount);
-                        } else if (source.equals("mission")) {
-                            details.setMissionPulls(details.getMissionPulls() + amount);
-                            if (index < pendingPullTypes.size() - 1
-                                    || !source.equals(pendingPullTypes.get(pendingPullTypes.size() - 1))) {
-                                index++;
-                            }
-                            continue;
-                        }
-
-                        index++;
-                    } else {
-                        details.setMissionPulls(details.getMissionPulls() + amount);
-                    }
-                }
-
-                lootrunDetailsStorage.touched();
-            }
-
-            if (pendingPullTypes.contains("mission")) {
-                expectMissionPulls = true;
-            }
-
+            processPendingPulls(styledText, pendingPullTypes);
             return;
         }
 
         if (expectMissionPulls) {
-            matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
+            processDelayedMissionPulls(styledText);
+        }
+    }
 
-            boolean foundPulls = false;
-            while (matcher.find()) {
-                int amount = Integer.parseInt(matcher.group(1));
-                LootrunDetails details = getCurrentLootrunDetails();
+    private void processPendingPulls(StyledText styledText, List<String> pendingPullTypes) {
+        Matcher matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
+        List<Integer> pullAmounts = new ArrayList<>();
+
+        while (matcher.find()) {
+            pullAmounts.add(Integer.parseInt(matcher.group(1)));
+        }
+
+        if (pullAmounts.isEmpty()) return;
+
+        LootrunDetails details = getCurrentLootrunDetails();
+        int index = 0;
+
+        for (int amount : pullAmounts) {
+            if (index < pendingPullTypes.size()) {
+                String source = pendingPullTypes.get(index);
+
+                if (source.equals("trial")) {
+                    details.setTrialPulls(details.getTrialPulls() + amount);
+                    index++;
+                } else if (source.equals("mission")) {
+                    details.setMissionPulls(details.getMissionPulls() + amount);
+                    // Only increment if not the last mission or different from last
+                    if (index < pendingPullTypes.size() - 1
+                            || !source.equals(pendingPullTypes.get(pendingPullTypes.size() - 1))) {
+                        index++;
+                    }
+                }
+            } else {
                 details.setMissionPulls(details.getMissionPulls() + amount);
-                lootrunDetailsStorage.touched();
-                foundPulls = true;
-            }
-
-            if (foundPulls) {
-                return;
-            }
-
-            if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
-                expectMissionPulls = false;
             }
         }
 
-        matcher = CHALLENGE_GET_REROLL_PATTERN.matcher(styledText.getString());
+        lootrunDetailsStorage.touched();
+
+        if (pendingPullTypes.contains("mission")) {
+            expectMissionPulls = true;
+        }
+    }
+
+    private void processDelayedMissionPulls(StyledText styledText) {
+        Matcher matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
+        boolean foundPulls = false;
+
+        while (matcher.find()) {
+            int amount = Integer.parseInt(matcher.group(1));
+            LootrunDetails details = getCurrentLootrunDetails();
+            details.setMissionPulls(details.getMissionPulls() + amount);
+            lootrunDetailsStorage.touched();
+            foundPulls = true;
+        }
+
+        if (foundPulls) return;
+
+        if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
+            expectMissionPulls = false;
+        }
+    }
+
+    private void handleChallengeRewards(StyledText styledText) {
+        Matcher matcher = CHALLENGE_GET_REROLL_PATTERN.matcher(styledText.getString());
         if (matcher.find()) {
             int amount = Integer.parseInt(matcher.group(1));
             LootrunDetails details = getCurrentLootrunDetails();
@@ -463,14 +484,15 @@ public final class LootrunModel extends Model {
             LootrunDetails details = getCurrentLootrunDetails();
             details.setMissionSacrifices(details.getMissionSacrifices() + amount);
             lootrunDetailsStorage.touched();
-            return;
         }
+    }
 
-        matcher = CHALLENGE_COMPLETED_PATTERN.matcher(styledText.getString());
+    private void handleChallengeState(StyledText styledText) {
+        Matcher matcher = CHALLENGE_COMPLETED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
             challengeCompleted();
             expectChallengePulls = true;
-            expectMissionPulls = false; // Clear mission pull expectation when challenge completes
+            expectMissionPulls = false;
             return;
         }
 
@@ -489,70 +511,71 @@ public final class LootrunModel extends Model {
         matcher = CHALLENGE_FAILED_PATTERN.matcher(styledText.getString());
         if (matcher.matches()) {
             challengeFailed();
-            expectMissionPulls = false; // Clear mission pull expectation when challenge fails
-            return;
+            expectMissionPulls = false;
         }
+    }
 
-        matcher = styledText.getMatcher(BEACONS_PATTERN);
-        if (matcher.matches()) {
-            String beaconOneColorStr = matcher.group("beaconOneColor");
-            CustomColor beaconOneColor = beaconOneColorStr.startsWith("#")
-                    ? CustomColor.fromHexString(beaconOneColorStr)
-                    : CustomColor.fromChatFormatting(ChatFormatting.getByCode(beaconOneColorStr.charAt(0)));
-            LootrunBeaconKind beaconOneKind = LootrunBeaconKind.fromColor(beaconOneColor);
-
-            if (beaconOneKind == null) return;
-
-            boolean beaconOneVibrant = matcher.group("beaconOneVibrant") != null;
-            if (beaconOneVibrant) {
-                vibrantBeacons.add(beaconOneKind);
+    private void handleBeaconSelection(StyledText styledText) {
+        Matcher matcher = styledText.getMatcher(BEACONS_PATTERN);
+        if (!matcher.matches()) {
+            if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
+                newBeacons();
+                expectMissionPulls = false;
+                return;
             }
 
-            expectOrangeBeacon = expectOrangeBeacon || beaconOneKind == LootrunBeaconKind.ORANGE;
-            expectRainbowBeacon = expectRainbowBeacon || beaconOneKind == LootrunBeaconKind.RAINBOW;
-
-            String beaconTwoColorStr = matcher.group("beaconTwoColor");
-
-            // Count beacons for Optimism mission (each beacon line has 1 or 2 beacons)
-            int beaconsOnThisLine = beaconTwoColorStr == null ? 1 : 2;
-            currentBeaconCount += beaconsOnThisLine;
-
-            if (beaconTwoColorStr == null) return;
-
-            CustomColor beaconTwoColor = beaconTwoColorStr.startsWith("#")
-                    ? CustomColor.fromHexString(beaconTwoColorStr)
-                    : CustomColor.fromChatFormatting(ChatFormatting.getByCode(beaconTwoColorStr.charAt(0)));
-            LootrunBeaconKind beaconTwoKind = LootrunBeaconKind.fromColor(beaconTwoColor);
-
-            if (beaconTwoKind == null) return;
-
-            boolean beaconTwoVibrant = matcher.group("beaconTwoVibrant") != null;
-            if (beaconTwoVibrant) {
-                vibrantBeacons.add(beaconTwoKind);
+            Matcher endPullsMatcher = styledText.getMatcher(BEACON_PULLS_AMOUNT_PATTERN);
+            if (endPullsMatcher.find()) {
+                beaconRewardPulls = Integer.parseInt(endPullsMatcher.group(1));
             }
-
-            expectOrangeBeacon = expectOrangeBeacon || beaconTwoKind == LootrunBeaconKind.ORANGE;
-            expectRainbowBeacon = expectRainbowBeacon || beaconTwoKind == LootrunBeaconKind.RAINBOW;
-
             return;
         }
 
+        processBeaconColors(matcher);
+    }
 
-        Matcher endPullsMatcher = styledText.getMatcher(BEACON_PULLS_AMOUNT_PATTERN);
-        if (endPullsMatcher.find()) {
-            beaconRewardPulls = Integer.parseInt(endPullsMatcher.group(1));
-            return;
+    private void processBeaconColors(Matcher matcher) {
+        String beaconOneColorStr = matcher.group("beaconOneColor");
+        CustomColor beaconOneColor = parseBeaconColor(beaconOneColorStr);
+        LootrunBeaconKind beaconOneKind = LootrunBeaconKind.fromColor(beaconOneColor);
+
+        if (beaconOneKind == null) return;
+
+        if (matcher.group("beaconOneVibrant") != null) {
+            vibrantBeacons.add(beaconOneKind);
         }
 
-        if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
-            newBeacons();
-            expectMissionPulls = false; // Clear mission pull expectation when new beacons appear
-            return;
+        expectOrangeBeacon = expectOrangeBeacon || beaconOneKind == LootrunBeaconKind.ORANGE;
+        expectRainbowBeacon = expectRainbowBeacon || beaconOneKind == LootrunBeaconKind.RAINBOW;
+
+        String beaconTwoColorStr = matcher.group("beaconTwoColor");
+        int beaconsOnThisLine = beaconTwoColorStr == null ? 1 : 2;
+        currentBeaconCount += beaconsOnThisLine;
+
+        if (beaconTwoColorStr == null) return;
+
+        CustomColor beaconTwoColor = parseBeaconColor(beaconTwoColorStr);
+        LootrunBeaconKind beaconTwoKind = LootrunBeaconKind.fromColor(beaconTwoColor);
+
+        if (beaconTwoKind == null) return;
+
+        if (matcher.group("beaconTwoVibrant") != null) {
+            vibrantBeacons.add(beaconTwoKind);
         }
 
+        expectOrangeBeacon = expectOrangeBeacon || beaconTwoKind == LootrunBeaconKind.ORANGE;
+        expectRainbowBeacon = expectRainbowBeacon || beaconTwoKind == LootrunBeaconKind.RAINBOW;
+    }
+
+    private CustomColor parseBeaconColor(String colorStr) {
+        return colorStr.startsWith("#")
+                ? CustomColor.fromHexString(colorStr)
+                : CustomColor.fromChatFormatting(ChatFormatting.getByCode(colorStr.charAt(0)));
+    }
+
+    private void handleBeaconAmounts(StyledText styledText) {
         if (expectOrangeBeacon) {
             Matcher orangeMatcher = styledText.getMatcher(ORANGE_AMOUNT_PATTERN);
-
             if (orangeMatcher.find()) {
                 expectOrangeBeacon = false;
                 getCurrentLootrunDetails().setOrangeAmount(Integer.parseInt(orangeMatcher.group(1)));
@@ -562,7 +585,6 @@ public final class LootrunModel extends Model {
 
         if (expectRainbowBeacon) {
             Matcher rainbowMatcher = styledText.getMatcher(RAINBOW_AMOUNT_PATTERN);
-
             if (rainbowMatcher.find()) {
                 expectRainbowBeacon = false;
                 getCurrentLootrunDetails().setRainbowAmount(Integer.parseInt(rainbowMatcher.group(1)));
