@@ -112,7 +112,7 @@ public final class LootrunModel extends Model {
     private static final Pattern REWARD_REROLLS_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Rerolls§r");
     private static final Pattern REWARD_SACRIFICES_PATTERN = Pattern.compile("§.(\\d+)§7 Reward Sacrifices§r");
     private static final Pattern LOOTRUN_EXPERIENCE_PATTERN = Pattern.compile("§.(\\d+)§7 Lootrun Experience§r");
-    private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+?(\\d+) Reward Pulls?\\]");
+    private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+(\\d+) Reward Pulls?\\]");
 
     // Lootrun Master Container
     private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Pulls");
@@ -223,9 +223,11 @@ public final class LootrunModel extends Model {
     private boolean expectTrialStarted = false;
     private boolean expectOrangeBeacon = false;
     private boolean expectRainbowBeacon = false;
+    private boolean expectRedBeacon = false;
     private boolean expectChallengePulls = false;
     private boolean inBeaconSelection = false;
     private boolean expectMissionPulls = false;
+    private boolean expectCompleteChaosReward = false;
 
     // Data to be persisted
     @Persisted
@@ -378,8 +380,6 @@ public final class LootrunModel extends Model {
     }
 
     private void handleTrialAndMissionPulls(StyledText styledText) {
-        List<String> pendingPullTypes = new ArrayList<>();
-
         if (styledText.getMatcher(TRIAL_STARTED_PATTERN).find()) {
             expectTrialStarted = true;
         }
@@ -390,10 +390,6 @@ public final class LootrunModel extends Model {
                 TrialType trial = TrialType.fromName(trialMatcher.group("trial"));
                 addTrial(trial);
                 expectTrialStarted = false;
-
-                if (trial == TrialType.LIGHTS_OUT) {
-                    pendingPullTypes.add("trial");
-                }
             }
         }
 
@@ -403,78 +399,23 @@ public final class LootrunModel extends Model {
             addMission(mission);
 
             if (mission == MissionType.JESTERS_TRICK || mission == MissionType.CHRONOKINESIS) {
-                pendingPullTypes.add("mission");
+                expectMissionPulls = true;
+                WynntilsMod.info("Set expectMissionPulls for " + mission.getName());
             }
-        }
-
-        if (!pendingPullTypes.isEmpty()) {
-            processPendingPulls(styledText, pendingPullTypes);
-            return;
         }
 
         if (expectMissionPulls) {
-            processDelayedMissionPulls(styledText);
-        }
-    }
-
-    private void processPendingPulls(StyledText styledText, List<String> pendingPullTypes) {
-        Matcher matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
-        List<Integer> pullAmounts = new ArrayList<>();
-
-        while (matcher.find()) {
-            pullAmounts.add(Integer.parseInt(matcher.group(1)));
-        }
-
-        if (pullAmounts.isEmpty()) return;
-
-        LootrunDetails details = getCurrentLootrunDetails();
-        int index = 0;
-
-        for (int amount : pullAmounts) {
-            if (index < pendingPullTypes.size()) {
-                String source = pendingPullTypes.get(index);
-
-                if (source.equals("trial")) {
-                    details.setTrialPulls(details.getTrialPulls() + amount);
-                    index++;
-                } else if (source.equals("mission")) {
-                    details.setMissionPulls(details.getMissionPulls() + amount);
-                    // Only increment if not the last mission or different from last
-                    if (index < pendingPullTypes.size() - 1
-                            || !source.equals(pendingPullTypes.get(pendingPullTypes.size() - 1))) {
-                        index++;
-                    }
-                }
-            } else {
+            Matcher pullsMatcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
+            while (pullsMatcher.find()) {
+                int amount = Integer.parseInt(pullsMatcher.group(1));
+                LootrunDetails details = getCurrentLootrunDetails();
                 details.setMissionPulls(details.getMissionPulls() + amount);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("Added " + amount + " mission pulls");
             }
         }
-
-        lootrunDetailsStorage.touched();
-
-        if (pendingPullTypes.contains("mission")) {
-            expectMissionPulls = true;
-        }
     }
 
-    private void processDelayedMissionPulls(StyledText styledText) {
-        Matcher matcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
-        boolean foundPulls = false;
-
-        while (matcher.find()) {
-            int amount = Integer.parseInt(matcher.group(1));
-            LootrunDetails details = getCurrentLootrunDetails();
-            details.setMissionPulls(details.getMissionPulls() + amount);
-            lootrunDetailsStorage.touched();
-            foundPulls = true;
-        }
-
-        if (foundPulls) return;
-
-        if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
-            expectMissionPulls = false;
-        }
-    }
 
     private void handleChallengeRewards(StyledText styledText) {
         Matcher matcher = CHALLENGE_GET_REROLL_PATTERN.matcher(styledText.getString());
@@ -501,6 +442,17 @@ public final class LootrunModel extends Model {
             challengeCompleted();
             expectChallengePulls = true;
             expectMissionPulls = false;
+
+            if (getCurrentLootrunDetails().getTrials().contains(TrialType.LIGHTS_OUT)) {
+                LootrunDetails details = getCurrentLootrunDetails();
+                details.setTrialPulls(details.getTrialPulls() + 2);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("Added 2 trial pulls from Lights Out");
+            }
+
+            if (getCurrentLootrunDetails().getMissions().contains(MissionType.COMPLETE_CHAOS)) {
+                expectCompleteChaosReward = true;
+            }
             return;
         }
 
@@ -520,21 +472,33 @@ public final class LootrunModel extends Model {
         if (matcher.matches()) {
             challengeFailed();
             expectMissionPulls = false;
+            expectCompleteChaosReward = false;
         }
     }
 
     private void handleBeaconSelection(StyledText styledText) {
+        if (expectCompleteChaosReward) {
+            Matcher beaconMatcher = styledText.getMatcher(BEACONS_PATTERN);
+            if (beaconMatcher.matches()) {
+                handleCompleteChaosReward(beaconMatcher);
+                expectCompleteChaosReward = false;
+                return;
+            }
+        }
+
         Matcher matcher = styledText.getMatcher(BEACONS_PATTERN);
         if (!matcher.matches()) {
             if (styledText.matches(CHOOSE_BEACON_PATTERN)) {
                 newBeacons();
                 expectMissionPulls = false;
+                expectChallengePulls = false;
+                expectCompleteChaosReward = false;
                 return;
             }
 
-            Matcher endPullsMatcher = styledText.getMatcher(BEACON_PULLS_AMOUNT_PATTERN);
-            if (endPullsMatcher.find()) {
-                beaconRewardPulls = Integer.parseInt(endPullsMatcher.group(1));
+            Matcher pulls = styledText.getMatcher(BEACON_PULLS_AMOUNT_PATTERN);
+            if (pulls.find()) {
+                beaconRewardPulls = Integer.parseInt(pulls.group(1));
             }
             return;
         }
@@ -598,6 +562,45 @@ public final class LootrunModel extends Model {
                 getCurrentLootrunDetails().setRainbowAmount(Integer.parseInt(rainbowMatcher.group(1)));
                 lootrunDetailsStorage.touched();
             }
+        }
+    }
+
+    private void handleCompleteChaosReward(Matcher matcher) {
+        String beaconColorStr = matcher.group("beaconOneColor");
+        CustomColor beaconColor = parseBeaconColor(beaconColorStr);
+        LootrunBeaconKind beaconKind = LootrunBeaconKind.fromColor(beaconColor);
+
+        if (beaconKind == null) return;
+
+        LootrunDetails details = getCurrentLootrunDetails();
+
+        switch (beaconKind) {
+            case ORANGE:
+                expectOrangeBeacon = true;
+                break;
+            case RAINBOW:
+                expectRainbowBeacon = true;
+                break;
+            case RED:
+                expectRedBeacon = true;
+                break;
+            case PURPLE:
+            case DARK_GRAY:
+                Matcher pullsMatcher = BEACON_PULLS_AMOUNT_PATTERN.matcher(matcher.group());
+                if (pullsMatcher.find()) {
+                    int pulls = Integer.parseInt(pullsMatcher.group(1));
+
+                    if (beaconKind == LootrunBeaconKind.PURPLE &&
+                            details.getMissions().contains(MissionType.PORPHYROPHOBIA)) {
+                        pulls *= 2;
+                        WynntilsMod.info("Doubled Complete Chaos purple beacon pulls from " +
+                                pullsMatcher.group(1) + " to " + pulls + " (Porphyrophobia)");
+                    }
+
+                    details.setMissionPulls(details.getMissionPulls() + pulls);
+                    lootrunDetailsStorage.touched();
+                }
+                break;
         }
     }
 
@@ -720,15 +723,14 @@ public final class LootrunModel extends Model {
 
         Container currentContainer = Models.Container.getCurrentContainer();
 
-        if (!(currentContainer instanceof LootrunMasterContainer container)) {
-            if (currentContainer instanceof LootrunRewardChestContainer container) {
-                handleRewardChestClick(e, container);
-            }
-        } else {
+        if (currentContainer instanceof LootrunMasterContainer container) {
             handleLootrunMasterClick(e, container);
             return;
         }
 
+        if (currentContainer instanceof LootrunRewardChestContainer container) {
+            handleRewardChestClick(e, container);
+        }
     }
 
     private void handleLootrunMasterClick(ContainerClickEvent e, LootrunMasterContainer container) {
@@ -851,7 +853,7 @@ public final class LootrunModel extends Model {
         double oldBeaconDistanceToPlayer = closestBeacon == null
                 ? Double.MAX_VALUE
                 : VectorUtils.distanceIgnoringY(
-                        closestBeacon.position(), McUtils.mc().player.position());
+                closestBeacon.position(), McUtils.mc().player.position());
         if (newBeaconDistanceToPlayer < BEACON_REMOVAL_RADIUS
                 && newBeaconDistanceToPlayer <= oldBeaconDistanceToPlayer) {
             setClosestBeacon(event.getBeacon());
@@ -958,7 +960,7 @@ public final class LootrunModel extends Model {
         activeTaskTypes.putIfAbsent(beaconPair.a().beaconKind(), lootrunMarker.getTaskType());
 
         boolean foundBeacon = updateTaskLocationPrediction(
-                        beaconPair.a(), lootrunMarker, beaconMarker.distance().get())
+                beaconPair.a(), lootrunMarker, beaconMarker.distance().get())
                 || beacons.containsKey(beaconPair.a().beaconKind());
 
         entity.setRendered(!foundBeacon || !shouldHide);
@@ -1279,7 +1281,7 @@ public final class LootrunModel extends Model {
 
         int rerolls = mission.getRerolls();
         if (rerolls > 0) {
-            getCurrentLootrunDetails().setMissionPulls(getCurrentLootrunDetails().getMissionPulls() + rerolls);
+            getCurrentLootrunDetails().setMissionRerolls(getCurrentLootrunDetails().getMissionRerolls() + rerolls);
         }
 
         int sacrifices = mission.getSacrifices();
@@ -1319,9 +1321,13 @@ public final class LootrunModel extends Model {
             addToRedBeaconTaskCount(-1);
         }
 
-        // Then, check if we completed have new challenges from a red beacon.
-        if (getLastTaskBeaconColor() == LootrunBeaconKind.RED && amount.max() > oldChallenges.max()) {
-            addToRedBeaconTaskCount(amount.max() - oldChallenges.max());
+        // Then, check if we have new challenges from a red beacon.
+        if (amount.max() > oldChallenges.max()) {
+            // Either from completing a red beacon task, or from Complete Chaos reward
+            if (getLastTaskBeaconColor() == LootrunBeaconKind.RED || expectRedBeacon) {
+                addToRedBeaconTaskCount(amount.max() - oldChallenges.max());
+                expectRedBeacon = false;
+            }
         }
     }
 
@@ -1352,11 +1358,16 @@ public final class LootrunModel extends Model {
                 && newState == LootrunningState.IN_TASK
                 && closestBeacon != null
                 && closestBeacon.beaconKind() instanceof LootrunBeaconKind color) {
+
             WynntilsMod.info("Selected a " + color + " beacon at " + closestBeacon.position());
             getCurrentLootrunDetails().incrementBeaconCount(color);
             lootrunDetailsStorage.touched();
 
             setLastTaskBeaconColor(color);
+
+            if (color == LootrunBeaconKind.RED && expectRedBeacon) {
+                WynntilsMod.info("Selected red beacon from Complete Chaos");
+            }
             WynntilsMod.postEvent(new LootrunBeaconSelectedEvent(
                     closestBeacon,
                     beacons.get(closestBeacon.beaconKind()).taskLocation(),
@@ -1385,7 +1396,6 @@ public final class LootrunModel extends Model {
         if (color == LootrunBeaconKind.RAINBOW) {
             if (lootrunDetails.getRainbowAmount() != -1) {
                 int oldCount = lootrunDetails.getRainbowBeaconCount();
-
                 int newCount = Math.max(oldCount + lootrunDetails.getRainbowAmount(), 0);
                 lootrunDetails.setRainbowBeaconCount(newCount);
             } else {
@@ -1393,9 +1403,7 @@ public final class LootrunModel extends Model {
             }
         } else if (color == LootrunBeaconKind.ORANGE) {
             if (lootrunDetails.getOrangeAmount() != -1) {
-                List<Integer> orangeList =
-                        new ArrayList<>(getCurrentLootrunDetails().getOrangeBeaconCounts());
-
+                List<Integer> orangeList = new ArrayList<>(lootrunDetails.getOrangeBeaconCounts());
                 orangeList.add(lootrunDetails.getOrangeAmount());
                 lootrunDetails.setOrangeBeaconCounts(orangeList);
             } else {
@@ -1403,9 +1411,21 @@ public final class LootrunModel extends Model {
             }
         } else if (color == LootrunBeaconKind.PURPLE || color == LootrunBeaconKind.DARK_GRAY) {
             if (beaconRewardPulls > 0) {
-                lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + beaconRewardPulls);
+                int pulls = beaconRewardPulls;
+
+                if (color == LootrunBeaconKind.PURPLE &&
+                        lootrunDetails.getMissions().contains(MissionType.PORPHYROPHOBIA)) {
+                    pulls *= 2;
+                    WynntilsMod.info("Doubled purple beacon pulls from " + beaconRewardPulls + " to " + pulls + " (Porphyrophobia)");
+                }
+
+                lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + pulls);
                 lootrunDetailsStorage.touched();
             }
+        }
+
+        if (getCurrentLootrunDetails().getMissions().contains(MissionType.COMPLETE_CHAOS)) {
+            expectCompleteChaosReward = true;
         }
 
         lootrunDetails.setOrangeAmount(-1);
@@ -1426,6 +1446,8 @@ public final class LootrunModel extends Model {
         getCurrentLootrunDetails().setOrangeAmount(-1);
         getCurrentLootrunDetails().setRainbowAmount(-1);
         lootrunDetailsStorage.touched();
+
+        expectRedBeacon = false;
     }
 
     private void reduceBeaconCounts() {
