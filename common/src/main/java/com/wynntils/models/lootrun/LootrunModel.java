@@ -115,10 +115,10 @@ public final class LootrunModel extends Model {
     private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+(\\d+) Reward Pulls?\\]");
 
     // Lootrun Master Container
-    private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Pulls");
-    private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Rerolls?");
-    private static final Pattern DAILY_BONUS_SACRIFICES_PATTERN = Pattern.compile("Â§b- Â§f\\+(\\d+) Â§7Reward Sacrifices?");
-    private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("Â§c-.*?(\\d+).*?Reward Pulls");
+    private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Pulls");
+    private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Rerolls?");
+    private static final Pattern DAILY_BONUS_SACRIFICES_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Sacrifices?");
+    private static final Pattern SACRIFICED_PULLS_LORE_PATTERN = Pattern.compile("§c-.*?(\\d+).*?Reward Pulls");
 
     // Statistics
     private static final Pattern TIME_ELAPSED_PATTERN = Pattern.compile("§7Time Elapsed: §.(\\d+):(\\d+)");
@@ -772,11 +772,16 @@ public final class LootrunModel extends Model {
         }
 
         LootrunDetails details = getCurrentLootrunDetails();
-        details.setDailyBonusPulls(details.getDailyBonusPulls() + dailyBonusPulls);
-        details.setDailyBonusRerolls(details.getDailyBonusRerolls() + dailyBonusRerolls);
-        details.setDailyBonusSacrifices(details.getDailyBonusSacrifices() + dailyBonusSacrifices);
-        details.setSacrificedPulls(details.getSacrificedPulls() + sacrificedPulls);
+
+        details.setDailyBonusPulls(dailyBonusPulls);
+        details.setDailyBonusRerolls(dailyBonusRerolls);
+        details.setDailyBonusSacrifices(dailyBonusSacrifices);
+        details.setSacrificedPulls(sacrificedPulls);
         lootrunDetailsStorage.touched();
+
+        WynntilsMod.info("Starting lootrun with: " + dailyBonusPulls + " daily pulls, " +
+                dailyBonusRerolls + " daily rerolls, " + dailyBonusSacrifices +
+                " daily sacrifices, " + sacrificedPulls + " sacrificed pulls");
     }
 
     private void handleRewardChestClick(ContainerClickEvent e, LootrunRewardChestContainer container) {
@@ -1095,7 +1100,7 @@ public final class LootrunModel extends Model {
     public int getTotalSacrifices() { return getDailyBonusSacrifices() + getMissionSacrifices() + getTrialSacrifices(); }
 
     public double getSacrificePercentage() {
-        int sacrifices = getTotalSacrifices();
+        int sacrifices = Models.Lootrun.getTotalSacrifices();
 
         if (sacrifices == 0) return 0.0;
 
@@ -1111,7 +1116,7 @@ public final class LootrunModel extends Model {
         if (percent == 0.0) return 0;
 
         double sacrificed = totalPulls * (percent / 100.0);
-        return (int) Math.ceil(sacrificed);
+        return (int) Math.round(sacrificed);
     }
 
     public int getEffectivePulls() { return getTotalPulls() * (1 + getTotalRerolls()); }
@@ -1210,12 +1215,7 @@ public final class LootrunModel extends Model {
         resetBeaconCounts();
         resetMissions();
         resetTrials();
-        resetBeaconCounts();
         resetChallengePulls();
-        resetDailyBonusPulls();
-        resetDailyBonusRerolls();
-        resetDailyBonusSacrifices();
-        resetSacrificedPulls();
         resetMissionPulls();
         resetMissionRerolls();
         resetMissionSacrifices();
@@ -1333,14 +1333,11 @@ public final class LootrunModel extends Model {
 
     private void handleStateChange(LootrunningState oldState, LootrunningState newState) {
         if (newState == LootrunningState.NOT_RUNNING) {
-            resetBeaconStorage();
-            resetMissions();
-            resetTrials();
+            resetLootrunDetails();
 
             taskType = null;
             setClosestBeacon(null);
             setLastTaskBeaconColor(null);
-            resetLootrunDetails();
 
             possibleTaskLocations = new HashSet<>();
 
