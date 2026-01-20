@@ -114,6 +114,10 @@ public final class LootrunModel extends Model {
     private static final Pattern LOOTRUN_EXPERIENCE_PATTERN = Pattern.compile("§.(\\d+)§7 Lootrun Experience§r");
     private static final Pattern CHALLENGE_PULLS_PATTERN = Pattern.compile("\\[\\+(\\d+) Reward Pulls?\\]");
 
+    // Trial Rewards
+    private static final Pattern TRIAL_END_REROLLS_PATTERN = Pattern.compile("§.(\\d+)§7 End Reward Rerolls?");
+    private static final Pattern TRIAL_END_SACRIFICES_PATTERN = Pattern.compile("§.(\\d+)§7 End Reward Sacrifices?");
+
     // Lootrun Master Container
     private static final Pattern DAILY_BONUS_PULLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Pulls");
     private static final Pattern DAILY_BONUS_REROLLS_PATTERN = Pattern.compile("§b- §f\\+(\\d+) §7Reward Rerolls?");
@@ -141,7 +145,7 @@ public final class LootrunModel extends Model {
     private static final Pattern BEACONS_PATTERN = Pattern.compile(
             "[\uDAFF\uDFFF-\uDB00\uDC78]§(?<beaconOneColor>[a-z0-9#]+)§l(?<beaconOneVibrant>Vibrant )?.+? Beacon(§r[\uDAFF\uDFFF-\uDB00\uDC78]§(?<beaconTwoColor>[a-z0-9#]+)§l(?<beaconTwoVibrant>Vibrant )?.+ Beacon)?");
     private static final Pattern ORANGE_AMOUNT_PATTERN =
-            Pattern.compile("(?:.+)?§7(?:.+?)?for (?:§b)?(\\d+)(?:§r)? Challenges");
+            Pattern.compile("(?:.+)?§7(?:.+?)?for (?:§b)?(\\d+)(?:§r|§7)? Challenges");
     private static final Pattern RAINBOW_AMOUNT_PATTERN =
             Pattern.compile("(?:.+)?§7(?:.+?)?next (?:§b)?(\\d+)(§(r|7))? Challenges");
     private static final Pattern BEACON_PULLS_AMOUNT_PATTERN =
@@ -380,19 +384,25 @@ public final class LootrunModel extends Model {
     }
 
     private void handleTrialAndMissionPulls(StyledText styledText) {
+        // Check for trial started message
         if (styledText.getMatcher(TRIAL_STARTED_PATTERN).find()) {
             expectTrialStarted = true;
+            expectMissionPulls = false;
+            WynntilsMod.info("Detected trial started");
         }
 
+        // Look for trial name in the current message OR next messages
         if (expectTrialStarted) {
             Matcher trialMatcher = TRIAL_NAME_PATTERN.matcher(styledText.getString());
             if (trialMatcher.find()) {
                 TrialType trial = TrialType.fromName(trialMatcher.group("trial"));
                 addTrial(trial);
                 expectTrialStarted = false;
+                WynntilsMod.info("Added trial: " + trial.getName());
             }
         }
 
+        // Check for active missions
         Matcher missionMatcher = ACTIVE_MISSION_PATTERN.matcher(styledText.getString());
         while (missionMatcher.find()) {
             MissionType mission = MissionType.fromName(missionMatcher.group("mission"));
@@ -404,7 +414,7 @@ public final class LootrunModel extends Model {
             }
         }
 
-        if (expectMissionPulls) {
+        if (expectMissionPulls && !expectTrialStarted) {
             Matcher pullsMatcher = styledText.getMatcher(CHALLENGE_PULLS_PATTERN);
             while (pullsMatcher.find()) {
                 int amount = Integer.parseInt(pullsMatcher.group(1));
@@ -417,20 +427,50 @@ public final class LootrunModel extends Model {
     }
 
 
+
     private void handleChallengeRewards(StyledText styledText) {
-        Matcher matcher = CHALLENGE_GET_REROLL_PATTERN.matcher(styledText.getString());
+        LootrunDetails details = getCurrentLootrunDetails();
+
+        // Check for trial end rerolls
+        Matcher matcher = TRIAL_END_REROLLS_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            if (!details.getTrials().contains(TrialType.GAMBLING_BEAST)) {
+                int amount = Integer.parseInt(matcher.group(1));
+                details.setTrialRerolls(details.getTrialRerolls() + amount);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("Added " + amount + " trial rerolls from End reward");
+            } else {
+                WynntilsMod.info("Skipping Gambling Beast trial rerolls (not implemented)");
+            }
+            return;
+        }
+
+        matcher = TRIAL_END_SACRIFICES_PATTERN.matcher(styledText.getString());
+        if (matcher.find()) {
+            if (!details.getTrials().contains(TrialType.ALL_IN)) {
+                int amount = Integer.parseInt(matcher.group(1));
+                details.setTrialSacrifices(details.getTrialSacrifices() + amount);
+                lootrunDetailsStorage.touched();
+                WynntilsMod.info("Added " + amount + " trial sacrifices from End reward");
+            } else {
+                WynntilsMod.info("Skipping All In trial sacrifices (not implemented)");
+            }
+            return;
+        }
+
+        // Check for regular mission rerolls (Gambling Beast mission)
+        matcher = CHALLENGE_GET_REROLL_PATTERN.matcher(styledText.getString());
         if (matcher.find()) {
             int amount = Integer.parseInt(matcher.group(1));
-            LootrunDetails details = getCurrentLootrunDetails();
             details.setMissionRerolls(details.getMissionRerolls() + amount);
             lootrunDetailsStorage.touched();
             return;
         }
 
+        // Check for regular mission sacrifices (Warmth Devourer)
         matcher = CHALLENGE_GET_SACRIFICE_PATTERN.matcher(styledText.getString());
         if (matcher.find()) {
             int amount = Integer.parseInt(matcher.group(1));
-            LootrunDetails details = getCurrentLootrunDetails();
             details.setMissionSacrifices(details.getMissionSacrifices() + amount);
             lootrunDetailsStorage.touched();
         }
@@ -442,13 +482,6 @@ public final class LootrunModel extends Model {
             challengeCompleted();
             expectChallengePulls = true;
             expectMissionPulls = false;
-
-            if (getCurrentLootrunDetails().getTrials().contains(TrialType.LIGHTS_OUT)) {
-                LootrunDetails details = getCurrentLootrunDetails();
-                details.setTrialPulls(details.getTrialPulls() + 2);
-                lootrunDetailsStorage.touched();
-                WynntilsMod.info("Added 2 trial pulls from Lights Out");
-            }
 
             if (getCurrentLootrunDetails().getMissions().contains(MissionType.COMPLETE_CHAOS)) {
                 expectCompleteChaosReward = true;
@@ -476,6 +509,7 @@ public final class LootrunModel extends Model {
         }
     }
 
+
     private void handleBeaconSelection(StyledText styledText) {
         if (expectCompleteChaosReward) {
             Matcher beaconMatcher = styledText.getMatcher(BEACONS_PATTERN);
@@ -499,6 +533,9 @@ public final class LootrunModel extends Model {
             Matcher pulls = styledText.getMatcher(BEACON_PULLS_AMOUNT_PATTERN);
             if (pulls.find()) {
                 beaconRewardPulls = Integer.parseInt(pulls.group(1));
+                // Store this in LootrunDetails so it persists across /class
+                getCurrentLootrunDetails().setLastBeaconRewardPulls(beaconRewardPulls);
+                lootrunDetailsStorage.touched();
             }
             return;
         }
@@ -1212,10 +1249,15 @@ public final class LootrunModel extends Model {
     }
 
     private void resetLootrunDetails() {
+        resetBeaconStorage();
         resetBeaconCounts();
         resetMissions();
         resetTrials();
         resetChallengePulls();
+        resetDailyBonusPulls();
+        resetDailyBonusRerolls();
+        resetDailyBonusSacrifices();
+        resetSacrificedPulls();
         resetMissionPulls();
         resetMissionRerolls();
         resetMissionSacrifices();
@@ -1225,16 +1267,14 @@ public final class LootrunModel extends Model {
     }
 
     private void newBeacons() {
-        if (inBeaconSelection && getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)) {
-            if (currentBeaconCount > 0) {
-                LootrunDetails details = getCurrentLootrunDetails();
-                details.setMissionPulls(details.getMissionPulls() + currentBeaconCount);
-                lootrunDetailsStorage.touched();
-            }
+        if (inBeaconSelection && currentBeaconCount > 0 && getCurrentLootrunDetails().getMissions().contains(MissionType.OPTIMISM)) {
+            LootrunDetails details = getCurrentLootrunDetails();
+            details.setMissionPulls(details.getMissionPulls() + currentBeaconCount);
+            lootrunDetailsStorage.touched();
+            WynntilsMod.info("Added " + currentBeaconCount + " Optimism pulls from reroll");
         }
 
         currentBeaconCount = 0;
-
         inBeaconSelection = true;
 
         possibleTaskLocations.clear();
@@ -1347,6 +1387,7 @@ public final class LootrunModel extends Model {
             timeLeft = 0;
             challenges = CappedValue.EMPTY;
             inBeaconSelection = false;
+            currentBeaconCount = 0;
             return;
         }
 
@@ -1381,6 +1422,7 @@ public final class LootrunModel extends Model {
             expectRainbowBeacon = false;
             reduceBeaconCounts();
             inBeaconSelection = false;
+            currentBeaconCount = 0;
             LOOTRUN_BEACON_COMPASS_PROVIDER.reloadTaskMarkers();
             return;
         }
@@ -1389,6 +1431,13 @@ public final class LootrunModel extends Model {
     private void challengeCompleted() {
         LootrunBeaconKind color = getLastTaskBeaconColor();
         LootrunDetails lootrunDetails = getCurrentLootrunDetails();
+
+        // Add Lights Out trial pulls if the trial is active
+        if (lootrunDetails.getTrials().contains(TrialType.LIGHTS_OUT)) {
+            lootrunDetails.setTrialPulls(lootrunDetails.getTrialPulls() + 2);
+            lootrunDetailsStorage.touched();
+            WynntilsMod.info("Added 2 trial pulls from Lights Out");
+        }
 
         if (color == LootrunBeaconKind.RAINBOW) {
             if (lootrunDetails.getRainbowAmount() != -1) {
@@ -1407,16 +1456,20 @@ public final class LootrunModel extends Model {
                 WynntilsMod.warn("Completed orange beacon challenge but had no orange amount");
             }
         } else if (color == LootrunBeaconKind.PURPLE || color == LootrunBeaconKind.DARK_GRAY) {
-            if (beaconRewardPulls > 0) {
-                int pulls = beaconRewardPulls;
+            // Use persisted beacon reward pulls in case of /class
+            int pulls = lootrunDetails.getLastBeaconRewardPulls();
+
+            if (pulls > 0) {
+                lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + pulls);
 
                 if (color == LootrunBeaconKind.PURPLE &&
                         lootrunDetails.getMissions().contains(MissionType.PORPHYROPHOBIA)) {
-                    pulls *= 2;
-                    WynntilsMod.info("Doubled purple beacon pulls from " + beaconRewardPulls + " to " + pulls + " (Porphyrophobia)");
+                    lootrunDetails.setMissionPulls(lootrunDetails.getMissionPulls() + pulls);
+                    WynntilsMod.info("Added " + pulls + " Porphyrophobia mission pulls (matching purple beacon pulls)");
                 }
 
-                lootrunDetails.setChallengePulls(lootrunDetails.getChallengePulls() + pulls);
+                // Reset the stored beacon reward pulls after using them
+                lootrunDetails.setLastBeaconRewardPulls(0);
                 lootrunDetailsStorage.touched();
             }
         }
@@ -1429,6 +1482,7 @@ public final class LootrunModel extends Model {
         lootrunDetails.setRainbowAmount(-1);
         lootrunDetailsStorage.get().put(Models.Character.getId(), lootrunDetails);
     }
+
 
     private void challengeFailed() {
         LootrunBeaconKind color = getLastTaskBeaconColor();

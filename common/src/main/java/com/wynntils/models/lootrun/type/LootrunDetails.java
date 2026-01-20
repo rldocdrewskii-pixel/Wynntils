@@ -36,6 +36,7 @@ public class LootrunDetails {
     private int trialPulls = 0;
     private int trialRerolls = 0;
     private int trialSacrifices = 0;
+    private int lastBeaconRewardPulls = 0;
 
     public Map<LootrunBeaconKind, Integer> getSelectedBeacons() {
         return Collections.unmodifiableMap(selectedBeacons);
@@ -180,4 +181,12 @@ public class LootrunDetails {
     public int getTrialSacrifices() { return trialSacrifices; }
 
     public void setTrialSacrifices(int trialSacrifices) { this.trialSacrifices = trialSacrifices; }
+
+    public int getLastBeaconRewardPulls() {
+        return lastBeaconRewardPulls;
+    }
+
+    public void setLastBeaconRewardPulls(int lastBeaconRewardPulls) {
+        this.lastBeaconRewardPulls = lastBeaconRewardPulls;
+    }
 }
