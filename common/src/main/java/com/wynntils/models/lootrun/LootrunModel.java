@@ -1168,6 +1168,10 @@ public final class LootrunModel extends Model {
         }
     }
 
+    public List<Integer> getOrangeBeaconCounts() {
+        return getCurrentLootrunDetails().getOrangeBeaconCounts();
+    }
+
     public int getActiveRainbowBeacons() {
         return getCurrentLootrunDetails().getRainbowBeaconCount();
     }
@@ -1420,7 +1424,6 @@ public final class LootrunModel extends Model {
             setClosestBeacon(null);
             expectOrangeBeacon = false;
             expectRainbowBeacon = false;
-            reduceBeaconCounts();
             inBeaconSelection = false;
             currentBeaconCount = 0;
             LOOTRUN_BEACON_COMPASS_PROVIDER.reloadTaskMarkers();
@@ -1478,6 +1481,8 @@ public final class LootrunModel extends Model {
             expectCompleteChaosReward = true;
         }
 
+        reduceBeaconCounts();
+
         lootrunDetails.setOrangeAmount(-1);
         lootrunDetails.setRainbowAmount(-1);
         lootrunDetailsStorage.get().put(Models.Character.getId(), lootrunDetails);
@@ -1493,6 +1498,8 @@ public final class LootrunModel extends Model {
         if (color == LootrunBeaconKind.CRIMSON) {
             addTrial(TrialType.FAILED);
         }
+
+        reduceBeaconCounts();
 
         getCurrentLootrunDetails().setOrangeAmount(-1);
         getCurrentLootrunDetails().setRainbowAmount(-1);

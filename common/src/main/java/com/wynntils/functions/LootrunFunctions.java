@@ -407,6 +407,28 @@ public class LootrunFunctions {
         }
     }
 
+    public static class LootrunOrangeBeaconIndexFunction extends Function<String> {
+        @Override
+        public String getValue(FunctionArguments arguments) {
+            int index = arguments.getArgument("index").getIntegerValue();
+
+            List<Integer> orangeCounts = Models.Lootrun.getOrangeBeaconCounts();
+
+            if (index < 0 || index >= orangeCounts.size()) {
+                return "";
+            }
+
+            return String.valueOf(orangeCounts.get(index));
+        }
+
+        @Override
+        public FunctionArguments.Builder getArgumentsBuilder() {
+            return new FunctionArguments.RequiredArgumentBuilder(
+                    List.of(new Argument<>("index", Integer.class, null))
+            );
+        }
+    }
+
     public static class ChestsOpenedThisSessionFunction extends Function<Integer> {
         @Override
         public Integer getValue(FunctionArguments arguments) {
