@@ -13,21 +13,39 @@ public enum TrialType {
 
     ALL_IN("All In"),
     GAMBLING_BEAST("Gambling Beast"),
-    HUBRIS("Hubris"),
+    HUBRIS("Hubris", 1, 1),
     LIGHTS_OUT("Lights Out"),
-    SIDE_HUSTLE("Side Hustle"),
+    SIDE_HUSTLE("Side Hustle", 0, 2),
     TREASURY_BILL("Treasury Bill"),
-    ULTIMATE_SACRIFICE("Ultimate Sacrifice"),
-    WARMTH_DEVOURER("Warmth Devourer");
+    ULTIMATE_SACRIFICE("Ultimate Sacrifice", 2, 0),
+    WARMTH_DEVOURER("Warmth Devourer", 1, 1);
 
     private final String name;
+    private final int sacrifices;
+    private final int rerolls;
 
     TrialType(String name) {
         this.name = name;
+        this.sacrifices = 0;
+        this.rerolls = 0;
+    }
+
+    TrialType(String name, int sacrifices, int rerolls) {
+        this.name = name;
+        this.sacrifices = sacrifices;
+        this.rerolls = rerolls;
     }
 
     public String getName() {
         return name;
+    }
+
+    public int getSacrifices() {
+        return sacrifices;
+    }
+
+    public int getRerolls() {
+        return rerolls;
     }
 
     public static TrialType fromName(String name) {
